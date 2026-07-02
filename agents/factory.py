@@ -94,6 +94,18 @@ class AgentFactory:
         return agent
 
     def _create_stub_manifest_dict(self, name: str, capabilities: List[str]) -> Dict[str, Any]:
+        inputs = []
+        if name in ["Blueprint Agent", "BlueprintAgent", "blueprint_agent"]:
+            inputs = [{"artifact_type": "prd", "required": True}]
+            
+        outputs = []
+        for c in capabilities:
+            art_type = "system_design" if c in ["blueprint_agent", "blueprint_design", "system_design"] else c
+            outputs.append({
+                "artifact_type": art_type, 
+                "file_path_pattern": f"docs/02_{art_type}.md" if art_type == "system_design" else f"{art_type}.md"
+            })
+
         return {
             "schema_version": "1.0",
             "version": "1.0.0",
@@ -101,8 +113,8 @@ class AgentFactory:
             "description": f"Stub manifest for {name}",
             "mission": f"Execute tasks for {name}",
             "capabilities": {"produces": capabilities},
-            "inputs": [],
-            "outputs": [{"artifact_type": c, "file_path_pattern": f"{c}.md"} for c in capabilities],
+            "inputs": inputs,
+            "outputs": outputs,
             "allowed_mcp_servers": ["filesystem", "sandbox", "developer_knowledge"],
             "retry_policy": {
                 "base_delay_seconds": 1,

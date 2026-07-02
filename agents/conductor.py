@@ -24,6 +24,17 @@ class Conductor:
         if "PlanningAgent" not in self.agent_factory.class_registry:
             self.agent_factory.register_agent_class("PlanningAgent", PlanningAgent)
 
+        # Ensure BlueprintAgent is registered in factory
+        from agents.blueprint import BlueprintAgent
+        if "Blueprint Agent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("Blueprint Agent", BlueprintAgent)
+        if "BlueprintAgent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("BlueprintAgent", BlueprintAgent)
+        if "blueprint_agent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("blueprint_agent", BlueprintAgent)
+        if "blueprint_design" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("blueprint_design", BlueprintAgent)
+
     def run(self, product_idea: str, project_id: Optional[str] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Main entry point for coordinating a request.
@@ -49,15 +60,21 @@ class Conductor:
         else:
             logger.info(f"Using provided project ID: {project_id}")
         
+        planning_node_id = "planning_node"
+        blueprint_node_id = "blueprint_node"
+
         if not session_id:
             session_id = f"sess-{uuid.uuid4().hex[:8]}"
             if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "create_session"):
                 try:
                     dag = {
                         "nodes": [
-                            {"id": "planning_node", "name": "Planning", "agent": "Planning Agent", "status": "PENDING"}
+                            {"id": planning_node_id, "name": "Planning", "agent": "Planning Agent", "status": "PENDING"},
+                            {"id": blueprint_node_id, "name": "Blueprint", "agent": "Blueprint Agent", "status": "PENDING"}
                         ],
-                        "edges": [],
+                        "edges": [
+                            {"source": planning_node_id, "target": blueprint_node_id}
+                        ],
                         "history": []
                     }
                     self.brain_client.service.create_session(project_id=project_id, git_commit_hash=None, dag=dag)
@@ -70,14 +87,15 @@ class Conductor:
             logger.info(f"Using provided session ID: {session_id}")
 
         # 2. Initialize runtime session state
-        node_id = "planning_node"
         state_dict = {
             "session_id": session_id,
             "project_id": project_id,
-            f"node_{node_id}_task_instruction": product_idea,
-            f"node_{node_id}_status": "Pending",
+            f"node_{planning_node_id}_task_instruction": product_idea,
+            f"node_{planning_node_id}_status": "Pending",
+            f"node_{blueprint_node_id}_task_instruction": "Generate system design blueprint based on PRD",
+            f"node_{blueprint_node_id}_status": "Pending",
             "workflow_state": "IN_PROGRESS",
-            "workflow_active_nodes": [node_id],
+            "workflow_active_nodes": [planning_node_id],
             "workflow_completed_nodes": []
         }
         session_state = SessionStateAdapter(state_dict)
@@ -90,7 +108,7 @@ class Conductor:
             agent = self.agent_factory.create_for_capability(
                 capability=capability,
                 session_id=session_id,
-                node_id=node_id,
+                node_id=planning_node_id,
                 session_state=session_state
             )
             logger.info(f"Resolved agent '{agent.manifest.name}' for capability '{capability}'")
@@ -99,18 +117,54 @@ class Conductor:
             raise e
 
         # 4. Execute PlanningAgent through BaseAgent lifecycle
-        logger.info(f"Executing agent '{agent.manifest.name}' lifecycle for node '{node_id}'...")
+        logger.info(f"Executing agent '{agent.manifest.name}' lifecycle for node '{planning_node_id}'...")
         try:
             if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
                 try:
-                    self.brain_client.service.update_session(session_id, {"active_node": node_id, "status": "IN_PROGRESS"})
+                    self.brain_client.service.update_session(session_id, {"active_node": planning_node_id, "status": "IN_PROGRESS"})
                 except Exception as e:
                     logger.warning(f"Failed to update session active node: {e}")
 
-            lifecycle_result = agent.execute_lifecycle(session_id=session_id, node_id=node_id)
+            lifecycle_result = agent.execute_lifecycle(session_id=session_id, node_id=planning_node_id)
             logger.info(f"Agent '{agent.manifest.name}' lifecycle executed successfully.")
         except Exception as e:
             logger.error(f"Agent execution failed: {e}")
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                except Exception:
+                    pass
+            raise e
+
+        # 4b. Execute BlueprintAgent through BaseAgent lifecycle
+        if lifecycle_result.get("status") != "success":
+            raise Exception("Planning Agent execution failed, halting workflow.")
+
+        session_state.set_node_status(planning_node_id, "Completed")
+        session_state._state["workflow_completed_nodes"].append(planning_node_id)
+        session_state._state["workflow_active_nodes"] = [blueprint_node_id]
+
+        blueprint_capability = "blueprint_agent"
+        logger.info(f"Resolving specialist agent for capability '{blueprint_capability}'...")
+        try:
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"active_node": blueprint_node_id})
+                except Exception as e:
+                    logger.warning(f"Failed to update session active node to blueprint_node: {e}")
+
+            blueprint_agent = self.agent_factory.create_for_capability(
+                capability=blueprint_capability,
+                session_id=session_id,
+                node_id=blueprint_node_id,
+                session_state=session_state
+            )
+            logger.info(f"Resolved agent '{blueprint_agent.manifest.name}' for capability '{blueprint_capability}'")
+
+            blueprint_result = blueprint_agent.execute_lifecycle(session_id=session_id, node_id=blueprint_node_id)
+            logger.info(f"Agent '{blueprint_agent.manifest.name}' lifecycle executed successfully.")
+        except Exception as e:
+            logger.error(f"Blueprint Agent execution failed: {e}")
             if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
                 try:
                     self.brain_client.service.update_session(session_id, {"status": "FAILED"})
@@ -146,11 +200,11 @@ class Conductor:
         response = {
             "session_id": session_id,
             "project_id": project_id,
-            "status": "success" if lifecycle_result.get("status") == "success" else "failed",
+            "status": "success" if lifecycle_result.get("status") == "success" and blueprint_result.get("status") == "success" else "failed",
             "state": session_state._state,
             "artifacts": artifacts,
             "decisions": decisions,
-            "metrics": lifecycle_result.get("metrics", {})
+            "metrics": blueprint_result.get("metrics", {})
         }
         logger.info("Final response constructed and returned.")
         return response

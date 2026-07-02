@@ -23,6 +23,7 @@ from agents.skill_loader import Skill, SkillLoader
 from agents.brain_client import BrainServiceClient, LocalBrainServiceClient
 from agents.factory import AgentFactory
 from agents.planning import PlanningAgent
+from agents.blueprint import BlueprintAgent
 from agents.conductor import Conductor
 
 __all__ = [
@@ -52,5 +53,6 @@ __all__ = [
     "LocalBrainServiceClient",
     "AgentFactory",
     "PlanningAgent",
+    "BlueprintAgent",
     "Conductor"
 ]
