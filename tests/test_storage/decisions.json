@@ -1,0 +1,17 @@
+{
+    "dec-0b5fecb3": {
+        "session_id": "sess-445ff745",
+        "node": "planning_node",
+        "agent": "Planning Agent",
+        "title": "Include tools rental scope",
+        "rationale": "Primary business objective",
+        "confidence_score": 1.0,
+        "alternatives_considered": [],
+        "dependencies": [],
+        "artifacts_produced": [
+            "01_prd.md"
+        ],
+        "id": "dec-0b5fecb3",
+        "timestamp": "2026-07-02T18:13:27.130357+00:00"
+    }
+}

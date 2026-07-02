@@ -35,6 +35,11 @@ class Conductor:
         if "blueprint_design" not in self.agent_factory.class_registry:
             self.agent_factory.register_agent_class("blueprint_design", BlueprintAgent)
 
+        # Ensure ImplementationAgent is registered in factory using role-based registry only
+        from agents.implementation import ImplementationAgent
+        if "implementation_agent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("implementation_agent", ImplementationAgent)
+
     def run(self, product_idea: str, project_id: Optional[str] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Main entry point for coordinating a request.
@@ -62,22 +67,25 @@ class Conductor:
         
         planning_node_id = "planning_node"
         blueprint_node_id = "blueprint_node"
+        implementation_node_id = "implementation_node"
 
         if not session_id:
             session_id = f"sess-{uuid.uuid4().hex[:8]}"
             if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "create_session"):
                 try:
-                    dag = {
+                    pipeline = {
                         "nodes": [
                             {"id": planning_node_id, "name": "Planning", "agent": "Planning Agent", "status": "PENDING"},
-                            {"id": blueprint_node_id, "name": "Blueprint", "agent": "Blueprint Agent", "status": "PENDING"}
+                            {"id": blueprint_node_id, "name": "Blueprint", "agent": "Blueprint Agent", "status": "PENDING"},
+                            {"id": implementation_node_id, "name": "Implementation", "agent": "implementation_agent", "status": "PENDING"}
                         ],
                         "edges": [
-                            {"source": planning_node_id, "target": blueprint_node_id}
+                            {"source": planning_node_id, "target": blueprint_node_id},
+                            {"source": blueprint_node_id, "target": implementation_node_id}
                         ],
                         "history": []
                     }
-                    self.brain_client.service.create_session(project_id=project_id, git_commit_hash=None, dag=dag)
+                    self.brain_client.service.create_session(project_id=project_id, git_commit_hash=None, dag=pipeline)
                     logger.info(f"Session created in Project Brain with ID: {session_id}")
                 except Exception as e:
                     logger.warning(f"Failed to create session through service: {e}")
@@ -94,6 +102,8 @@ class Conductor:
             f"node_{planning_node_id}_status": "Pending",
             f"node_{blueprint_node_id}_task_instruction": "Generate system design blueprint based on PRD",
             f"node_{blueprint_node_id}_status": "Pending",
+            f"node_{implementation_node_id}_task_instruction": "Generate backend code scaffold based on system design blueprint",
+            f"node_{implementation_node_id}_status": "Pending",
             "workflow_state": "IN_PROGRESS",
             "workflow_active_nodes": [planning_node_id],
             "workflow_completed_nodes": []
@@ -172,6 +182,46 @@ class Conductor:
                     pass
             raise e
 
+        # 4c. Execute ImplementationAgent through BaseAgent lifecycle
+        if blueprint_result.get("status") != "success":
+            raise Exception("Blueprint Agent execution failed, halting workflow.")
+
+        session_state.set_node_status(blueprint_node_id, "Completed")
+        session_state._state["workflow_completed_nodes"].append(blueprint_node_id)
+        session_state._state["workflow_active_nodes"] = [implementation_node_id]
+
+        implementation_capability = "implementation_agent"
+        logger.info(f"Resolving specialist agent for capability '{implementation_capability}'...")
+        try:
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"active_node": implementation_node_id})
+                except Exception as e:
+                    logger.warning(f"Failed to update session active node to implementation_node: {e}")
+
+            implementation_agent = self.agent_factory.create_for_capability(
+                capability=implementation_capability,
+                session_id=session_id,
+                node_id=implementation_node_id,
+                session_state=session_state
+            )
+            logger.info(f"Resolved agent '{implementation_agent.manifest.name}' for capability '{implementation_capability}'")
+
+            implementation_result = implementation_agent.execute_lifecycle(session_id=session_id, node_id=implementation_node_id)
+            logger.info(f"Agent '{implementation_agent.manifest.name}' lifecycle executed successfully.")
+        except Exception as e:
+            logger.error(f"Implementation Agent execution failed: {e}")
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                except Exception:
+                    pass
+            raise e
+
+        session_state.set_node_status(implementation_node_id, "Completed")
+        session_state._state["workflow_completed_nodes"].append(implementation_node_id)
+        session_state._state["workflow_active_nodes"] = []
+
         # 5. Persist final session updates and retrieve outcomes from Project Brain
         if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
             try:
@@ -200,11 +250,12 @@ class Conductor:
         response = {
             "session_id": session_id,
             "project_id": project_id,
-            "status": "success" if lifecycle_result.get("status") == "success" and blueprint_result.get("status") == "success" else "failed",
+            "status": "success" if lifecycle_result.get("status") == "success" and blueprint_result.get("status") == "success" and implementation_result.get("status") == "success" else "failed",
             "state": session_state._state,
             "artifacts": artifacts,
             "decisions": decisions,
-            "metrics": blueprint_result.get("metrics", {})
+            "metrics": implementation_result.get("metrics", {})
         }
         logger.info("Final response constructed and returned.")
         return response
+

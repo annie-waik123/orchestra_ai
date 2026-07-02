@@ -97,13 +97,24 @@ class AgentFactory:
         inputs = []
         if name in ["Blueprint Agent", "BlueprintAgent", "blueprint_agent"]:
             inputs = [{"artifact_type": "prd", "required": True}]
+        elif name == "implementation_agent":
+            inputs = [{"artifact_type": "system_design", "required": True}]
             
         outputs = []
         for c in capabilities:
-            art_type = "system_design" if c in ["blueprint_agent", "blueprint_design", "system_design"] else c
+            if c in ["blueprint_agent", "blueprint_design", "system_design"]:
+                art_type = "system_design"
+            elif c in ["implementation_agent", "backend_scaffold"]:
+                art_type = "backend_scaffold"
+            else:
+                art_type = c
+
+            file_path_pattern = f"docs/02_{art_type}.md" if art_type == "system_design" else (
+                "docs/03_backend_scaffold.md" if art_type == "backend_scaffold" else f"{art_type}.md"
+            )
             outputs.append({
                 "artifact_type": art_type, 
-                "file_path_pattern": f"docs/02_{art_type}.md" if art_type == "system_design" else f"{art_type}.md"
+                "file_path_pattern": file_path_pattern
             })
 
         return {
