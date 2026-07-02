@@ -1,0 +1,36 @@
+{
+    "aud-288a6733": {
+        "id": "aud-288a6733",
+        "session_id": "sess-b9061eaf",
+        "timestamp": "2026-07-02T20:27:20.032307+00:00",
+        "agent": "System",
+        "action": "CREATE_SESSION",
+        "details": {
+            "git_commit": null
+        }
+    },
+    "aud-d680cdcb": {
+        "id": "aud-d680cdcb",
+        "session_id": "sess-b9061eaf",
+        "timestamp": "2026-07-02T20:27:20.036154+00:00",
+        "agent": "Planning Agent",
+        "action": "STORE_DECISION",
+        "details": {
+            "title": "Include tools rental scope",
+            "node": "planning_node",
+            "decision_id": "dec-c1666778"
+        }
+    },
+    "aud-e96a736f": {
+        "id": "aud-e96a736f",
+        "session_id": "sess-b9061eaf",
+        "timestamp": "2026-07-02T20:27:20.061023+00:00",
+        "agent": "Planning Agent",
+        "action": "STORE_ARTIFACT",
+        "details": {
+            "file_path": "01_prd.md",
+            "version": 1,
+            "artifact_id": "art-d5513a73"
+        }
+    }
+}

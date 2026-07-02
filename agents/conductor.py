@@ -57,6 +57,11 @@ class Conductor:
         if "repair_agent" not in self.agent_factory.class_registry:
             self.agent_factory.register_agent_class("repair_agent", RepairAgent)
 
+        # Ensure LearningAgent is registered in factory
+        from agents.learning import LearningAgent
+        if "learning_agent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("learning_agent", LearningAgent)
+
     def run(self, product_idea: str, project_id: Optional[str] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Main entry point for coordinating a request.
@@ -88,6 +93,7 @@ class Conductor:
         validation_node_id = "validation_node"
         evaluation_node_id = "evaluation_node"
         repair_node_id = "repair_node"
+        learning_node_id = "learning_node"
 
         if not session_id:
             session_id = f"sess-{uuid.uuid4().hex[:8]}"
@@ -100,14 +106,16 @@ class Conductor:
                             {"id": implementation_node_id, "name": "Implementation", "agent": "implementation_agent", "status": "PENDING"},
                             {"id": validation_node_id, "name": "Validation", "agent": "runtime_validation_agent", "status": "PENDING"},
                             {"id": evaluation_node_id, "name": "Evaluation", "agent": "evaluation_agent", "status": "PENDING"},
-                            {"id": repair_node_id, "name": "Repair", "agent": "repair_agent", "status": "PENDING"}
+                            {"id": repair_node_id, "name": "Repair", "agent": "repair_agent", "status": "PENDING"},
+                            {"id": learning_node_id, "name": "Learning", "agent": "learning_agent", "status": "PENDING"}
                         ],
                         "edges": [
                             {"source": planning_node_id, "target": blueprint_node_id},
                             {"source": blueprint_node_id, "target": implementation_node_id},
                             {"source": implementation_node_id, "target": validation_node_id},
                             {"source": validation_node_id, "target": evaluation_node_id},
-                            {"source": evaluation_node_id, "target": repair_node_id}
+                            {"source": evaluation_node_id, "target": repair_node_id},
+                            {"source": repair_node_id, "target": learning_node_id}
                         ],
                         "history": []
                     }
@@ -136,6 +144,8 @@ class Conductor:
             f"node_{evaluation_node_id}_status": "Pending",
             f"node_{repair_node_id}_task_instruction": "Surgically repair any failure found in implementation or validation",
             f"node_{repair_node_id}_status": "Pending",
+            f"node_{learning_node_id}_task_instruction": "Extract execution history patterns from execution_report, evaluation_report, and repair_decision artifacts",
+            f"node_{learning_node_id}_status": "Pending",
             "workflow_state": "IN_PROGRESS",
             "workflow_active_nodes": [planning_node_id],
             "workflow_completed_nodes": []
@@ -428,6 +438,42 @@ class Conductor:
                     # Exit loop
                     break
 
+        # 4e. Execute LearningAgent through BaseAgent lifecycle
+        learning_result = {"status": "pending"}
+        session_state._state["workflow_active_nodes"] = [learning_node_id]
+        learning_capability = "learning_agent"
+        logger.info(f"Resolving specialist agent for capability '{learning_capability}'...")
+        try:
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"active_node": learning_node_id})
+                except Exception as e:
+                    logger.warning(f"Failed to update session active node to learning_node: {e}")
+
+            learning_agent = self.agent_factory.create_for_capability(
+                capability=learning_capability,
+                session_id=session_id,
+                node_id=learning_node_id,
+                session_state=session_state
+            )
+            logger.info(f"Resolved agent '{learning_agent.manifest.name}' for capability '{learning_capability}'")
+
+            learning_result = learning_agent.execute_lifecycle(session_id=session_id, node_id=learning_node_id)
+            logger.info(f"Agent '{learning_agent.manifest.name}' lifecycle executed successfully.")
+        except Exception as e:
+            logger.error(f"Learning Agent execution failed: {e}")
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                except Exception:
+                    pass
+            raise e
+
+        session_state.set_node_status(learning_node_id, "Completed")
+        if learning_node_id not in session_state._state["workflow_completed_nodes"]:
+            session_state._state["workflow_completed_nodes"].append(learning_node_id)
+        session_state._state["workflow_active_nodes"] = []
+
         # 5. Persist final session updates and retrieve outcomes from Project Brain
         if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
             try:
@@ -462,12 +508,13 @@ class Conductor:
                 implementation_result.get("status") == "success" and
                 validation_result.get("status") == "success" and
                 evaluation_result.get("status") == "success" and
-                repair_result.get("status") == "success"
+                repair_result.get("status") == "success" and
+                learning_result.get("status") == "success"
             ) else "failed",
             "state": session_state._state,
             "artifacts": artifacts,
             "decisions": decisions,
-            "metrics": repair_result.get("metrics", {})
+            "metrics": learning_result.get("metrics", {})
         }
         logger.info("Final response constructed and returned.")
         return response

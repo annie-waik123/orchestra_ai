@@ -12,6 +12,7 @@ from agents.implementation import ImplementationAgent
 from agents.runtime_validation import RuntimeValidationAgent
 from agents.evaluation import EvaluationAgent
 from agents.repair import RepairAgent
+from agents.learning import LearningAgent
 from tests.test_agent_framework import MockBrainServiceClient, MockMcpResolver
 
 class ConductorMockResolver(MockMcpResolver):
@@ -70,6 +71,20 @@ class ConductorMockResolver(MockMcpResolver):
                         "- [x] Routes Loaded: PASSED\n"
                     )
                 }
+            if path == "docs/05_evaluation_report.md":
+                return {
+                    "content": (
+                        "# Evaluation Report\n\n"
+                        "## 3. Issues Detected\n"
+                        "None\n"
+                    )
+                }
+            if path == "docs/06_repair_decision.json":
+                return {
+                    "content": (
+                        '{"repair_status": "no_action", "issues_detected": [], "fixes_applied": [], "retry_required": false}'
+                    )
+                }
             return {"content": "mock file content"}
         elif tool_name == "execute_command":
             return {
@@ -84,7 +99,7 @@ def test_conductor_e2e_flow():
     brain = MockBrainServiceClient()
     resolver = ConductorMockResolver()
     
-    # 2. Register Planning Agent, Blueprint Agent, Implementation Agent, Runtime Validation Agent, and Evaluation Agent in Project Brain mock registry
+    # 2. Register Planning Agent, Blueprint Agent, Implementation Agent, Runtime Validation Agent, Evaluation Agent, Repair Agent, and Learning Agent in Project Brain mock registry
     factory = AgentFactory(brain, mcp_resolver=resolver)
     
     factory.register_agent_class("Planning Agent", PlanningAgent)
@@ -110,6 +125,10 @@ def test_conductor_e2e_flow():
     factory.register_agent_class("repair_agent", RepairAgent)
     repair_manifest = factory._create_stub_manifest_dict("repair_agent", ["repair_agent"])
     brain.registered_manifests["repair_agent"] = repair_manifest
+
+    factory.register_agent_class("learning_agent", LearningAgent)
+    learning_manifest = factory._create_stub_manifest_dict("learning_agent", ["learning_agent"])
+    brain.registered_manifests["learning_agent"] = learning_manifest
     
     # 3. Instantiate Conductor
     conductor = Conductor(brain_client=brain, agent_factory=factory)
@@ -127,8 +146,8 @@ def test_conductor_e2e_flow():
     assert response["session_id"] == "sess_test_123"
     assert response["project_id"] == "proj_test_123"
     
-    # 6. Verify that the Conductor returns Planning, Blueprint, Implementation, Validation, Evaluation, and Repair artifacts
-    assert len(response["artifacts"]) == 6
+    # 6. Verify that the Conductor returns Planning, Blueprint, Implementation, Validation, Evaluation, Repair, and Learning artifacts
+    assert len(response["artifacts"]) == 7
     
     prd_artifact = next(a for a in response["artifacts"] if a["type"] == "prd")
     assert prd_artifact["generated_by"] == "Planning Agent"
@@ -137,22 +156,26 @@ def test_conductor_e2e_flow():
     blueprint_artifact = next(a for a in response["artifacts"] if a["type"] == "system_design")
     assert blueprint_artifact["generated_by"] == "Blueprint Agent"
     assert blueprint_artifact["file_path"] == "docs/02_system_design.md"
-
+ 
     scaffold_artifact = next(a for a in response["artifacts"] if a["type"] == "backend_scaffold")
     assert scaffold_artifact["generated_by"] == "implementation_agent"
     assert scaffold_artifact["file_path"] == "docs/03_backend_scaffold.md"
-
+ 
     validation_artifact = next(a for a in response["artifacts"] if a["type"] == "execution_report")
     assert validation_artifact["generated_by"] == "runtime_validation_agent"
     assert validation_artifact["file_path"] == "docs/04_execution_report.md"
-
+ 
     evaluation_artifact = next(a for a in response["artifacts"] if a["type"] == "evaluation_report")
     assert evaluation_artifact["generated_by"] == "evaluation_agent"
     assert evaluation_artifact["file_path"] == "docs/05_evaluation_report.md"
-
+ 
     repair_artifact = next(a for a in response["artifacts"] if a["type"] == "repair_decision")
     assert repair_artifact["generated_by"] == "repair_agent"
     assert repair_artifact["file_path"] == "docs/06_repair_decision.json"
+
+    learning_artifact = next(a for a in response["artifacts"] if a["type"] == "learning_report")
+    assert learning_artifact["generated_by"] == "learning_agent"
+    assert learning_artifact["file_path"] == "docs/07_learning_report.json"
     
     # 7. Verify artifact lineage is preserved inside Project Brain
     # Blueprint artifact depends on Planning artifact (docs/01_prd.md)
@@ -165,24 +188,28 @@ def test_conductor_e2e_flow():
     assert validation_artifact["file_path"] in evaluation_artifact["depends_on"]
     # Repair artifact depends on Evaluation artifact (docs/05_evaluation_report.md)
     assert evaluation_artifact["file_path"] in repair_artifact["depends_on"]
+    # Learning report depends on evaluation report and repair decision
+    assert evaluation_artifact["file_path"] in learning_artifact["depends_on"]
+    assert repair_artifact["file_path"] in learning_artifact["depends_on"]
     
     # 8. Verify decision records are stored in Project Brain
+    # Note: Learning Agent does not produce decision records, so total remains 6
     assert len(response["decisions"]) == 6
     planning_dec = next(d for d in response["decisions"] if d["agent"] == "Planning Agent")
     assert planning_dec["title"] == "Adopt standard modular workspace"
     
     blueprint_dec = next(d for d in response["decisions"] if d["agent"] == "Blueprint Agent")
     assert blueprint_dec["title"] == "Adopt microservices architecture"
-
+ 
     impl_dec = next(d for d in response["decisions"] if d["agent"] == "implementation_agent")
     assert impl_dec["title"] == "FastAPI project structure mapping rules"
-
+ 
     validation_dec = next(d for d in response["decisions"] if d["agent"] == "runtime_validation_agent")
     assert validation_dec["title"] == "Runtime execution validation in isolated sandbox"
-
+ 
     evaluation_dec = next(d for d in response["decisions"] if d["agent"] == "evaluation_agent")
     assert evaluation_dec["title"] == "Pipeline execution quality evaluation gate"
-
+ 
     repair_dec = next(d for d in response["decisions"] if d["agent"] == "repair_agent")
     assert repair_dec["title"] == "Surgical backend repair decision"
     
@@ -193,24 +220,27 @@ def test_conductor_e2e_flow():
     
     assert state["node_blueprint_node_status"] == "Completed"
     assert state["node_blueprint_node_outputs"] == ["system_design"]
-
+ 
     assert state["node_implementation_node_status"] == "Completed"
     assert state["node_implementation_node_outputs"] == ["backend_scaffold"]
-
+ 
     assert state["node_validation_node_status"] == "Completed"
     assert state["node_validation_node_outputs"] == ["execution_report"]
-
+ 
     assert state["node_evaluation_node_status"] == "Completed"
     assert state["node_evaluation_node_outputs"] == ["evaluation_report"]
-
+ 
     assert state["node_repair_node_status"] == "Completed"
     assert state["node_repair_node_outputs"] == ["repair_decision"]
+
+    assert state["node_learning_node_status"] == "Completed"
+    assert state["node_learning_node_outputs"] == ["learning_report"]
     
-    # 10. Verify metrics finalized for the final agent (Repair Agent)
+    # 10. Verify metrics finalized for the final agent (Learning Agent)
     assert "metrics" in response
-    assert response["metrics"]["agent_name"] == "repair_agent"
-    assert response["metrics"]["token_usage_prompt"] == 100
-    assert response["metrics"]["token_usage_completion"] == 250
+    assert response["metrics"]["agent_name"] == "learning_agent"
+    assert response["metrics"]["token_usage_prompt"] == 80
+    assert response["metrics"]["token_usage_completion"] == 180
 
 
 def test_blueprint_agent_output_schema():

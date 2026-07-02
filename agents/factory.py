@@ -115,6 +115,12 @@ class AgentFactory:
                 {"artifact_type": "execution_report", "required": True},
                 {"artifact_type": "evaluation_report", "required": True}
             ]
+        elif name in ["learning_agent", "LearningAgent"]:
+            inputs = [
+                {"artifact_type": "execution_report", "required": True},
+                {"artifact_type": "evaluation_report", "required": True},
+                {"artifact_type": "repair_decision", "required": True}
+            ]
             
         outputs = []
         for c in capabilities:
@@ -128,6 +134,8 @@ class AgentFactory:
                 art_type = "evaluation_report"
             elif c in ["repair_agent", "repair_report", "repair_decision"]:
                 art_type = "repair_decision"
+            elif c in ["learning_agent", "learning_report"]:
+                art_type = "learning_report"
             else:
                 art_type = c
 
@@ -135,7 +143,9 @@ class AgentFactory:
                 "docs/03_backend_scaffold.md" if art_type == "backend_scaffold" else (
                     "docs/04_execution_report.md" if art_type == "execution_report" else (
                         "docs/05_evaluation_report.md" if art_type == "evaluation_report" else (
-                            "docs/06_repair_decision.json" if art_type == "repair_decision" else f"{art_type}.md"
+                            "docs/06_repair_decision.json" if art_type == "repair_decision" else (
+                                "docs/07_learning_report.json" if art_type == "learning_report" else f"{art_type}.md"
+                            )
                         )
                     )
                 )
