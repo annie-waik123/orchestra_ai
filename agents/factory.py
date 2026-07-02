@@ -101,6 +101,13 @@ class AgentFactory:
             inputs = [{"artifact_type": "system_design", "required": True}]
         elif name == "runtime_validation_agent":
             inputs = [{"artifact_type": "backend_scaffold", "required": True}]
+        elif name in ["evaluation_agent", "EvaluationAgent"]:
+            inputs = [
+                {"artifact_type": "prd", "required": True},
+                {"artifact_type": "system_design", "required": True},
+                {"artifact_type": "backend_scaffold", "required": True},
+                {"artifact_type": "execution_report", "required": True}
+            ]
             
         outputs = []
         for c in capabilities:
@@ -110,12 +117,16 @@ class AgentFactory:
                 art_type = "backend_scaffold"
             elif c in ["runtime_validation_agent", "execution_report"]:
                 art_type = "execution_report"
+            elif c in ["evaluation_agent", "evaluation_report"]:
+                art_type = "evaluation_report"
             else:
                 art_type = c
 
             file_path_pattern = f"docs/02_{art_type}.md" if art_type == "system_design" else (
                 "docs/03_backend_scaffold.md" if art_type == "backend_scaffold" else (
-                    "docs/04_execution_report.md" if art_type == "execution_report" else f"{art_type}.md"
+                    "docs/04_execution_report.md" if art_type == "execution_report" else (
+                        "docs/05_evaluation_report.md" if art_type == "evaluation_report" else f"{art_type}.md"
+                    )
                 )
             )
             outputs.append({

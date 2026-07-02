@@ -45,6 +45,11 @@ class Conductor:
         if "runtime_validation_agent" not in self.agent_factory.class_registry:
             self.agent_factory.register_agent_class("runtime_validation_agent", RuntimeValidationAgent)
 
+        # Ensure EvaluationAgent is registered in factory
+        from agents.evaluation import EvaluationAgent
+        if "evaluation_agent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("evaluation_agent", EvaluationAgent)
+
     def run(self, product_idea: str, project_id: Optional[str] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Main entry point for coordinating a request.
@@ -74,6 +79,7 @@ class Conductor:
         blueprint_node_id = "blueprint_node"
         implementation_node_id = "implementation_node"
         validation_node_id = "validation_node"
+        evaluation_node_id = "evaluation_node"
 
         if not session_id:
             session_id = f"sess-{uuid.uuid4().hex[:8]}"
@@ -84,12 +90,14 @@ class Conductor:
                             {"id": planning_node_id, "name": "Planning", "agent": "Planning Agent", "status": "PENDING"},
                             {"id": blueprint_node_id, "name": "Blueprint", "agent": "Blueprint Agent", "status": "PENDING"},
                             {"id": implementation_node_id, "name": "Implementation", "agent": "implementation_agent", "status": "PENDING"},
-                            {"id": validation_node_id, "name": "Validation", "agent": "runtime_validation_agent", "status": "PENDING"}
+                            {"id": validation_node_id, "name": "Validation", "agent": "runtime_validation_agent", "status": "PENDING"},
+                            {"id": evaluation_node_id, "name": "Evaluation", "agent": "evaluation_agent", "status": "PENDING"}
                         ],
                         "edges": [
                             {"source": planning_node_id, "target": blueprint_node_id},
                             {"source": blueprint_node_id, "target": implementation_node_id},
-                            {"source": implementation_node_id, "target": validation_node_id}
+                            {"source": implementation_node_id, "target": validation_node_id},
+                            {"source": validation_node_id, "target": evaluation_node_id}
                         ],
                         "history": []
                     }
@@ -114,6 +122,8 @@ class Conductor:
             f"node_{implementation_node_id}_status": "Pending",
             f"node_{validation_node_id}_task_instruction": "Validate the generated backend scaffold by executing it inside the sandbox",
             f"node_{validation_node_id}_status": "Pending",
+            f"node_{evaluation_node_id}_task_instruction": "Evaluate the pipeline quality using existing artifacts",
+            f"node_{evaluation_node_id}_status": "Pending",
             "workflow_state": "IN_PROGRESS",
             "workflow_active_nodes": [planning_node_id],
             "workflow_completed_nodes": []
@@ -266,6 +276,42 @@ class Conductor:
 
         session_state.set_node_status(validation_node_id, "Completed")
         session_state._state["workflow_completed_nodes"].append(validation_node_id)
+        session_state._state["workflow_active_nodes"] = [evaluation_node_id]
+
+        # 4e. Execute EvaluationAgent through BaseAgent lifecycle
+        if validation_result.get("status") != "success":
+            raise Exception("Runtime Validation Agent execution failed, halting workflow.")
+
+        evaluation_capability = "evaluation_agent"
+        logger.info(f"Resolving specialist agent for capability '{evaluation_capability}'...")
+        try:
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"active_node": evaluation_node_id})
+                except Exception as e:
+                    logger.warning(f"Failed to update session active node to evaluation_node: {e}")
+
+            evaluation_agent = self.agent_factory.create_for_capability(
+                capability=evaluation_capability,
+                session_id=session_id,
+                node_id=evaluation_node_id,
+                session_state=session_state
+            )
+            logger.info(f"Resolved agent '{evaluation_agent.manifest.name}' for capability '{evaluation_capability}'")
+
+            evaluation_result = evaluation_agent.execute_lifecycle(session_id=session_id, node_id=evaluation_node_id)
+            logger.info(f"Agent '{evaluation_agent.manifest.name}' lifecycle executed successfully.")
+        except Exception as e:
+            logger.error(f"Evaluation Agent execution failed: {e}")
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                except Exception:
+                    pass
+            raise e
+
+        session_state.set_node_status(evaluation_node_id, "Completed")
+        session_state._state["workflow_completed_nodes"].append(evaluation_node_id)
         session_state._state["workflow_active_nodes"] = []
 
         # 5. Persist final session updates and retrieve outcomes from Project Brain
@@ -300,12 +346,13 @@ class Conductor:
                 lifecycle_result.get("status") == "success" and 
                 blueprint_result.get("status") == "success" and 
                 implementation_result.get("status") == "success" and
-                validation_result.get("status") == "success"
+                validation_result.get("status") == "success" and
+                evaluation_result.get("status") == "success"
             ) else "failed",
             "state": session_state._state,
             "artifacts": artifacts,
             "decisions": decisions,
-            "metrics": validation_result.get("metrics", {})
+            "metrics": evaluation_result.get("metrics", {})
         }
         logger.info("Final response constructed and returned.")
         return response

@@ -10,14 +10,80 @@ from agents.planning import PlanningAgent
 from agents.blueprint import BlueprintAgent
 from agents.implementation import ImplementationAgent
 from agents.runtime_validation import RuntimeValidationAgent
+from agents.evaluation import EvaluationAgent
 from tests.test_agent_framework import MockBrainServiceClient, MockMcpResolver
+
+class ConductorMockResolver(MockMcpResolver):
+    def __init__(self):
+        super().__init__()
+        self.written_files = {}
+
+    def call_tool(self, server: str, tool_name: str, args: Dict[str, Any]) -> Any:
+        if tool_name == "write_file":
+            self.written_files[args["path"]] = args["content"]
+            return "File written successfully"
+        elif tool_name == "read_file":
+            path = args["path"]
+            if path in self.written_files:
+                return {"content": self.written_files[path]}
+            if path == "docs/01_prd.md":
+                return {"content": "Scaffolded PRD\n"}
+            if path == "docs/02_system_design.md":
+                return {
+                    "content": (
+                        "# System Design Blueprint\n\n"
+                        "## 2. API Design\n"
+                        "- POST /api/v1/orders (creates order)\n"
+                        "- GET /api/v1/orders/{id} (gets status)\n\n"
+                        "## 3. Data Models\n"
+                        "- User (id, name, email)\n"
+                        "- Order (id, customer_id, status)\n\n"
+                        "## 4. Service Decomposition\n"
+                        "- OrderService (processes orders)\n"
+                    )
+                }
+            if path == "docs/03_backend_scaffold.md":
+                return {
+                    "content": (
+                        "# Backend Scaffold Summary\n\n"
+                        "## Generated File Structure\n"
+                        "- backend/.env\n"
+                        "- backend/app/config.py\n"
+                        "- backend/app/db.py\n"
+                        "- backend/app/models.py\n"
+                        "- backend/app/services.py\n"
+                        "- backend/app/api.py\n"
+                        "- backend/app/main.py\n"
+                    )
+                }
+            if path == "docs/04_execution_report.md":
+                return {
+                    "content": (
+                        "# Runtime Validation Report\n\n"
+                        "## 1. Summary\n"
+                        "- **Status**: SUCCESS\n\n"
+                        "## 2. Validation Checks\n"
+                        "- [x] Configuration Loaded: PASSED\n"
+                        "- [x] Python Imports Valid: PASSED\n"
+                        "- [x] FastAPI App Initialized: PASSED\n"
+                        "- [x] Routes Loaded: PASSED\n"
+                    )
+                }
+            return {"content": "mock file content"}
+        elif tool_name == "execute_command":
+            return {
+                "stdout": "VALIDATION_SUCCESS\nCONFIG_LOADED: True\nIMPORTS_VALID: True\nAPP_VALID: True\nROUTES_LOADED: True\n",
+                "stderr": "",
+                "exit_code": 0
+            }
+        return super().call_tool(server, tool_name, args)
 
 def test_conductor_e2e_flow():
     # 1. Initialize mock brain service client and MCP client resolver
     brain = MockBrainServiceClient()
-    resolver = MockMcpResolver()
+    resolver = ConductorMockResolver()
     
-    # 2. Register Planning Agent, Blueprint Agent, Implementation Agent, and Runtime Validation Agent in Project Brain mock registry
+    # 2. Register Planning Agent, Blueprint Agent, Implementation Agent, Runtime Validation Agent, and Evaluation Agent in Project Brain mock registry
     factory = AgentFactory(brain, mcp_resolver=resolver)
     
     factory.register_agent_class("Planning Agent", PlanningAgent)
@@ -35,6 +101,10 @@ def test_conductor_e2e_flow():
     factory.register_agent_class("runtime_validation_agent", RuntimeValidationAgent)
     validation_manifest = factory._create_stub_manifest_dict("runtime_validation_agent", ["runtime_validation_agent"])
     brain.registered_manifests["runtime_validation_agent"] = validation_manifest
+
+    factory.register_agent_class("evaluation_agent", EvaluationAgent)
+    evaluation_manifest = factory._create_stub_manifest_dict("evaluation_agent", ["evaluation_agent"])
+    brain.registered_manifests["evaluation_agent"] = evaluation_manifest
     
     # 3. Instantiate Conductor
     conductor = Conductor(brain_client=brain, agent_factory=factory)
@@ -52,8 +122,8 @@ def test_conductor_e2e_flow():
     assert response["session_id"] == "sess_test_123"
     assert response["project_id"] == "proj_test_123"
     
-    # 6. Verify that the Conductor returns Planning, Blueprint, Implementation, and Validation artifacts
-    assert len(response["artifacts"]) == 4
+    # 6. Verify that the Conductor returns Planning, Blueprint, Implementation, Validation, and Evaluation artifacts
+    assert len(response["artifacts"]) == 5
     
     prd_artifact = next(a for a in response["artifacts"] if a["type"] == "prd")
     assert prd_artifact["generated_by"] == "Planning Agent"
@@ -70,6 +140,10 @@ def test_conductor_e2e_flow():
     validation_artifact = next(a for a in response["artifacts"] if a["type"] == "execution_report")
     assert validation_artifact["generated_by"] == "runtime_validation_agent"
     assert validation_artifact["file_path"] == "docs/04_execution_report.md"
+
+    evaluation_artifact = next(a for a in response["artifacts"] if a["type"] == "evaluation_report")
+    assert evaluation_artifact["generated_by"] == "evaluation_agent"
+    assert evaluation_artifact["file_path"] == "docs/05_evaluation_report.md"
     
     # 7. Verify artifact lineage is preserved inside Project Brain
     # Blueprint artifact depends on Planning artifact (docs/01_prd.md)
@@ -78,9 +152,11 @@ def test_conductor_e2e_flow():
     assert blueprint_artifact["file_path"] in scaffold_artifact["depends_on"]
     # Validation artifact depends on Implementation artifact (docs/03_backend_scaffold.md)
     assert scaffold_artifact["file_path"] in validation_artifact["depends_on"]
+    # Evaluation artifact depends on Validation artifact (docs/04_execution_report.md)
+    assert validation_artifact["file_path"] in evaluation_artifact["depends_on"]
     
     # 8. Verify decision records are stored in Project Brain
-    assert len(response["decisions"]) == 4
+    assert len(response["decisions"]) == 5
     planning_dec = next(d for d in response["decisions"] if d["agent"] == "Planning Agent")
     assert planning_dec["title"] == "Adopt standard modular workspace"
     
@@ -92,6 +168,9 @@ def test_conductor_e2e_flow():
 
     validation_dec = next(d for d in response["decisions"] if d["agent"] == "runtime_validation_agent")
     assert validation_dec["title"] == "Runtime execution validation in isolated sandbox"
+
+    evaluation_dec = next(d for d in response["decisions"] if d["agent"] == "evaluation_agent")
+    assert evaluation_dec["title"] == "Pipeline execution quality evaluation gate"
     
     # 9. Verify the runtime session state adapter reflects Completed status for all nodes
     state = response["state"]
@@ -106,12 +185,15 @@ def test_conductor_e2e_flow():
 
     assert state["node_validation_node_status"] == "Completed"
     assert state["node_validation_node_outputs"] == ["execution_report"]
+
+    assert state["node_evaluation_node_status"] == "Completed"
+    assert state["node_evaluation_node_outputs"] == ["evaluation_report"]
     
-    # 10. Verify metrics finalized for the final agent (Runtime Validation Agent)
+    # 10. Verify metrics finalized for the final agent (Evaluation Agent)
     assert "metrics" in response
-    assert response["metrics"]["agent_name"] == "runtime_validation_agent"
+    assert response["metrics"]["agent_name"] == "evaluation_agent"
     assert response["metrics"]["token_usage_prompt"] == 100
-    assert response["metrics"]["token_usage_completion"] == 300
+    assert response["metrics"]["token_usage_completion"] == 200
 
 
 def test_blueprint_agent_output_schema():
