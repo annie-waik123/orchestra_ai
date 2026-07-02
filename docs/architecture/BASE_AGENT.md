@@ -1,4 +1,24 @@
+
 # BASE_AGENT.md
+Version: 1.0
+Status: ✅ FROZEN
+Owner: Orchestra AI
+Sprint: Sprint 1
+Last Updated: July 2026
+
+---
+
+## Purpose
+
+This document defines the approved BaseAgent architecture and lifecycle for Orchestra AI.
+
+It serves as the implementation contract for all agent implementations.
+
+Implementation must conform to this specification.
+
+Major architectural changes require an Architecture Review before modification.
+
+---
 
 **Orchestra AI — BaseAgent Implementation Specification**
 
@@ -1181,3 +1201,18 @@ This checklist is the implementation contract for Antigravity. Each item corresp
 ---
 
 *This document is ready for implementation. Questions about design decisions should reference `AGENT_FRAMEWORK.md` as the authoritative source. Proposed changes to any design decision in this document must be reviewed by the Architecture team before implementation begins.*
+---
+
+# Architecture Freeze
+
+This document is frozen.
+
+All Orchestra AI agents must inherit from this architecture.
+
+Changes require:
+
+- Architecture Review
+- Architecture Decision Record (ADR)
+- Version increment
+
+Sprint Status: Sprint 1 Complete

@@ -1,4 +1,4 @@
-# Agent Framework
+# AGENT_FRAMEWORK.md
 
 Version: 1.0
 
@@ -17,7 +17,6 @@ This document is frozen.
 Implementation must follow this specification.
 
 Major architectural changes require an Architecture Review before modification.
-# AGENT_FRAMEWORK.md
 
 **Orchestra AI — Reusable Agent Framework Specification**
 
