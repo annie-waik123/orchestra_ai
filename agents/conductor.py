@@ -1,0 +1,156 @@
+import uuid
+import logging
+from typing import Dict, Any, Optional
+from agents.factory import AgentFactory
+from agents.session_adapter import SessionStateAdapter
+from agents.brain_client import BrainServiceClient
+
+logger = logging.getLogger("orchestra_conductor")
+
+class Conductor:
+    """
+    Root orchestration agent entry point for Orchestra AI.
+    Coordinates requests by dispatching to specialist agents,
+    managing runtime session state, and persisting results.
+    """
+    def __init__(self, brain_client: BrainServiceClient, agent_factory: AgentFactory):
+        self.brain_client = brain_client
+        self.agent_factory = agent_factory
+        
+        # Ensure PlanningAgent is registered in factory
+        from agents.planning import PlanningAgent
+        if "Planning Agent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("Planning Agent", PlanningAgent)
+        if "PlanningAgent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("PlanningAgent", PlanningAgent)
+
+    def run(self, product_idea: str, project_id: Optional[str] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Main entry point for coordinating a request.
+        """
+        logger.info("Conductor execution started.")
+        
+        # 1. Project and Session Resolution
+        if not project_id:
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "create_project"):
+                try:
+                    project = self.brain_client.service.create_project(
+                        name="Auto-Generated Project",
+                        description=f"Project created for request: {product_idea[:50]}"
+                    )
+                    project_id = project["id"]
+                    logger.info(f"Project created in Project Brain with ID: {project_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to create project through service: {e}")
+                    project_id = f"proj-{uuid.uuid4().hex[:8]}"
+            else:
+                project_id = f"proj-{uuid.uuid4().hex[:8]}"
+                logger.info(f"Using generated project ID: {project_id}")
+        else:
+            logger.info(f"Using provided project ID: {project_id}")
+        
+        if not session_id:
+            session_id = f"sess-{uuid.uuid4().hex[:8]}"
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "create_session"):
+                try:
+                    dag = {
+                        "nodes": [
+                            {"id": "planning_node", "name": "Planning", "agent": "Planning Agent", "status": "PENDING"}
+                        ],
+                        "edges": [],
+                        "history": []
+                    }
+                    self.brain_client.service.create_session(project_id=project_id, git_commit_hash=None, dag=dag)
+                    logger.info(f"Session created in Project Brain with ID: {session_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to create session through service: {e}")
+            else:
+                logger.info(f"Using generated session ID: {session_id}")
+        else:
+            logger.info(f"Using provided session ID: {session_id}")
+
+        # 2. Initialize runtime session state
+        node_id = "planning_node"
+        state_dict = {
+            "session_id": session_id,
+            "project_id": project_id,
+            f"node_{node_id}_task_instruction": product_idea,
+            f"node_{node_id}_status": "Pending",
+            "workflow_state": "IN_PROGRESS",
+            "workflow_active_nodes": [node_id],
+            "workflow_completed_nodes": []
+        }
+        session_state = SessionStateAdapter(state_dict)
+        logger.info("Runtime session state initialized.")
+
+        # 3. Resolve Planning Agent through AgentFactory using role/capability-based registry lookup
+        capability = "prd"
+        logger.info(f"Resolving specialist agent for capability '{capability}'...")
+        try:
+            agent = self.agent_factory.create_for_capability(
+                capability=capability,
+                session_id=session_id,
+                node_id=node_id,
+                session_state=session_state
+            )
+            logger.info(f"Resolved agent '{agent.manifest.name}' for capability '{capability}'")
+        except Exception as e:
+            logger.error(f"Agent resolution failed for capability '{capability}': {e}")
+            raise e
+
+        # 4. Execute PlanningAgent through BaseAgent lifecycle
+        logger.info(f"Executing agent '{agent.manifest.name}' lifecycle for node '{node_id}'...")
+        try:
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"active_node": node_id, "status": "IN_PROGRESS"})
+                except Exception as e:
+                    logger.warning(f"Failed to update session active node: {e}")
+
+            lifecycle_result = agent.execute_lifecycle(session_id=session_id, node_id=node_id)
+            logger.info(f"Agent '{agent.manifest.name}' lifecycle executed successfully.")
+        except Exception as e:
+            logger.error(f"Agent execution failed: {e}")
+            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                try:
+                    self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                except Exception:
+                    pass
+            raise e
+
+        # 5. Persist final session updates and retrieve outcomes from Project Brain
+        if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+            try:
+                self.brain_client.service.update_session(session_id, {"status": "COMPLETED"})
+                logger.info("Session status updated to COMPLETED in Project Brain.")
+            except Exception as e:
+                logger.warning(f"Failed to finalize session status: {e}")
+
+        # Retrieve stored artifacts for this session to construct final response
+        artifacts = []
+        if hasattr(self.brain_client, "artifacts"):
+            artifacts = [a for a in self.brain_client.artifacts.values() if a.get("session_id") == session_id]
+        elif hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "list_session_artifacts"):
+            artifacts = self.brain_client.service.list_session_artifacts(session_id)
+
+        # Retrieve stored decisions for this session
+        decisions = []
+        if hasattr(self.brain_client, "decisions"):
+            decisions = [d for d in self.brain_client.decisions if d.get("session_id") == session_id]
+        elif hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "list_session_decisions"):
+            decisions = self.brain_client.service.list_session_decisions(session_id)
+
+        logger.info(f"Persisted {len(artifacts)} artifacts and {len(decisions)} decisions to Project Brain.")
+
+        # 6. Return final structured response
+        response = {
+            "session_id": session_id,
+            "project_id": project_id,
+            "status": "success" if lifecycle_result.get("status") == "success" else "failed",
+            "state": session_state._state,
+            "artifacts": artifacts,
+            "decisions": decisions,
+            "metrics": lifecycle_result.get("metrics", {})
+        }
+        logger.info("Final response constructed and returned.")
+        return response
