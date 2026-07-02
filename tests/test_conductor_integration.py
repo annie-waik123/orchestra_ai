@@ -11,6 +11,7 @@ from agents.blueprint import BlueprintAgent
 from agents.implementation import ImplementationAgent
 from agents.runtime_validation import RuntimeValidationAgent
 from agents.evaluation import EvaluationAgent
+from agents.repair import RepairAgent
 from tests.test_agent_framework import MockBrainServiceClient, MockMcpResolver
 
 class ConductorMockResolver(MockMcpResolver):
@@ -105,6 +106,10 @@ def test_conductor_e2e_flow():
     factory.register_agent_class("evaluation_agent", EvaluationAgent)
     evaluation_manifest = factory._create_stub_manifest_dict("evaluation_agent", ["evaluation_agent"])
     brain.registered_manifests["evaluation_agent"] = evaluation_manifest
+
+    factory.register_agent_class("repair_agent", RepairAgent)
+    repair_manifest = factory._create_stub_manifest_dict("repair_agent", ["repair_agent"])
+    brain.registered_manifests["repair_agent"] = repair_manifest
     
     # 3. Instantiate Conductor
     conductor = Conductor(brain_client=brain, agent_factory=factory)
@@ -122,8 +127,8 @@ def test_conductor_e2e_flow():
     assert response["session_id"] == "sess_test_123"
     assert response["project_id"] == "proj_test_123"
     
-    # 6. Verify that the Conductor returns Planning, Blueprint, Implementation, Validation, and Evaluation artifacts
-    assert len(response["artifacts"]) == 5
+    # 6. Verify that the Conductor returns Planning, Blueprint, Implementation, Validation, Evaluation, and Repair artifacts
+    assert len(response["artifacts"]) == 6
     
     prd_artifact = next(a for a in response["artifacts"] if a["type"] == "prd")
     assert prd_artifact["generated_by"] == "Planning Agent"
@@ -144,6 +149,10 @@ def test_conductor_e2e_flow():
     evaluation_artifact = next(a for a in response["artifacts"] if a["type"] == "evaluation_report")
     assert evaluation_artifact["generated_by"] == "evaluation_agent"
     assert evaluation_artifact["file_path"] == "docs/05_evaluation_report.md"
+
+    repair_artifact = next(a for a in response["artifacts"] if a["type"] == "repair_decision")
+    assert repair_artifact["generated_by"] == "repair_agent"
+    assert repair_artifact["file_path"] == "docs/06_repair_decision.json"
     
     # 7. Verify artifact lineage is preserved inside Project Brain
     # Blueprint artifact depends on Planning artifact (docs/01_prd.md)
@@ -154,9 +163,11 @@ def test_conductor_e2e_flow():
     assert scaffold_artifact["file_path"] in validation_artifact["depends_on"]
     # Evaluation artifact depends on Validation artifact (docs/04_execution_report.md)
     assert validation_artifact["file_path"] in evaluation_artifact["depends_on"]
+    # Repair artifact depends on Evaluation artifact (docs/05_evaluation_report.md)
+    assert evaluation_artifact["file_path"] in repair_artifact["depends_on"]
     
     # 8. Verify decision records are stored in Project Brain
-    assert len(response["decisions"]) == 5
+    assert len(response["decisions"]) == 6
     planning_dec = next(d for d in response["decisions"] if d["agent"] == "Planning Agent")
     assert planning_dec["title"] == "Adopt standard modular workspace"
     
@@ -171,6 +182,9 @@ def test_conductor_e2e_flow():
 
     evaluation_dec = next(d for d in response["decisions"] if d["agent"] == "evaluation_agent")
     assert evaluation_dec["title"] == "Pipeline execution quality evaluation gate"
+
+    repair_dec = next(d for d in response["decisions"] if d["agent"] == "repair_agent")
+    assert repair_dec["title"] == "Surgical backend repair decision"
     
     # 9. Verify the runtime session state adapter reflects Completed status for all nodes
     state = response["state"]
@@ -188,12 +202,15 @@ def test_conductor_e2e_flow():
 
     assert state["node_evaluation_node_status"] == "Completed"
     assert state["node_evaluation_node_outputs"] == ["evaluation_report"]
+
+    assert state["node_repair_node_status"] == "Completed"
+    assert state["node_repair_node_outputs"] == ["repair_decision"]
     
-    # 10. Verify metrics finalized for the final agent (Evaluation Agent)
+    # 10. Verify metrics finalized for the final agent (Repair Agent)
     assert "metrics" in response
-    assert response["metrics"]["agent_name"] == "evaluation_agent"
+    assert response["metrics"]["agent_name"] == "repair_agent"
     assert response["metrics"]["token_usage_prompt"] == 100
-    assert response["metrics"]["token_usage_completion"] == 200
+    assert response["metrics"]["token_usage_completion"] == 250
 
 
 def test_blueprint_agent_output_schema():

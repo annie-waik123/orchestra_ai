@@ -25,6 +25,7 @@ from agents.factory import AgentFactory
 from agents.planning import PlanningAgent
 from agents.blueprint import BlueprintAgent
 from agents.implementation import ImplementationAgent
+from agents.repair import RepairAgent
 from agents.conductor import Conductor
 
 __all__ = [
@@ -56,5 +57,6 @@ __all__ = [
     "PlanningAgent",
     "BlueprintAgent",
     "ImplementationAgent",
+    "RepairAgent",
     "Conductor"
 ]

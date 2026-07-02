@@ -1,5 +1,7 @@
 import uuid
 import logging
+import json
+import os
 from typing import Dict, Any, Optional
 from agents.factory import AgentFactory
 from agents.session_adapter import SessionStateAdapter
@@ -50,6 +52,11 @@ class Conductor:
         if "evaluation_agent" not in self.agent_factory.class_registry:
             self.agent_factory.register_agent_class("evaluation_agent", EvaluationAgent)
 
+        # Ensure RepairAgent is registered in factory
+        from agents.repair import RepairAgent
+        if "repair_agent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("repair_agent", RepairAgent)
+
     def run(self, product_idea: str, project_id: Optional[str] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Main entry point for coordinating a request.
@@ -80,6 +87,7 @@ class Conductor:
         implementation_node_id = "implementation_node"
         validation_node_id = "validation_node"
         evaluation_node_id = "evaluation_node"
+        repair_node_id = "repair_node"
 
         if not session_id:
             session_id = f"sess-{uuid.uuid4().hex[:8]}"
@@ -91,13 +99,15 @@ class Conductor:
                             {"id": blueprint_node_id, "name": "Blueprint", "agent": "Blueprint Agent", "status": "PENDING"},
                             {"id": implementation_node_id, "name": "Implementation", "agent": "implementation_agent", "status": "PENDING"},
                             {"id": validation_node_id, "name": "Validation", "agent": "runtime_validation_agent", "status": "PENDING"},
-                            {"id": evaluation_node_id, "name": "Evaluation", "agent": "evaluation_agent", "status": "PENDING"}
+                            {"id": evaluation_node_id, "name": "Evaluation", "agent": "evaluation_agent", "status": "PENDING"},
+                            {"id": repair_node_id, "name": "Repair", "agent": "repair_agent", "status": "PENDING"}
                         ],
                         "edges": [
                             {"source": planning_node_id, "target": blueprint_node_id},
                             {"source": blueprint_node_id, "target": implementation_node_id},
                             {"source": implementation_node_id, "target": validation_node_id},
-                            {"source": validation_node_id, "target": evaluation_node_id}
+                            {"source": validation_node_id, "target": evaluation_node_id},
+                            {"source": evaluation_node_id, "target": repair_node_id}
                         ],
                         "history": []
                     }
@@ -124,6 +134,8 @@ class Conductor:
             f"node_{validation_node_id}_status": "Pending",
             f"node_{evaluation_node_id}_task_instruction": "Evaluate the pipeline quality using existing artifacts",
             f"node_{evaluation_node_id}_status": "Pending",
+            f"node_{repair_node_id}_task_instruction": "Surgically repair any failure found in implementation or validation",
+            f"node_{repair_node_id}_status": "Pending",
             "workflow_state": "IN_PROGRESS",
             "workflow_active_nodes": [planning_node_id],
             "workflow_completed_nodes": []
@@ -202,117 +214,219 @@ class Conductor:
                     pass
             raise e
 
-        # 4c. Execute ImplementationAgent through BaseAgent lifecycle
+        # 4c. Execution Loop (Implementation -> Validation -> Evaluation -> Repair)
         if blueprint_result.get("status") != "success":
             raise Exception("Blueprint Agent execution failed, halting workflow.")
 
         session_state.set_node_status(blueprint_node_id, "Completed")
         session_state._state["workflow_completed_nodes"].append(blueprint_node_id)
-        session_state._state["workflow_active_nodes"] = [implementation_node_id]
 
-        implementation_capability = "implementation_agent"
-        logger.info(f"Resolving specialist agent for capability '{implementation_capability}'...")
-        try:
-            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+        loop_count = 0
+        max_loops = 3
+        next_node = implementation_node_id
+
+        implementation_result = {"status": "pending"}
+        validation_result = {"status": "pending"}
+        evaluation_result = {"status": "pending"}
+        repair_result = {"status": "pending"}
+
+        while loop_count < max_loops:
+            logger.info(f"--- Pipeline Loop Execution {loop_count + 1}/{max_loops} (starting at node '{next_node}') ---")
+
+            if next_node == implementation_node_id:
+                session_state._state["workflow_active_nodes"] = [implementation_node_id]
+                implementation_capability = "implementation_agent"
+                logger.info(f"Resolving specialist agent for capability '{implementation_capability}'...")
                 try:
-                    self.brain_client.service.update_session(session_id, {"active_node": implementation_node_id})
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"active_node": implementation_node_id})
+                        except Exception as e:
+                            logger.warning(f"Failed to update session active node to implementation_node: {e}")
+
+                    implementation_agent = self.agent_factory.create_for_capability(
+                        capability=implementation_capability,
+                        session_id=session_id,
+                        node_id=implementation_node_id,
+                        session_state=session_state
+                    )
+                    logger.info(f"Resolved agent '{implementation_agent.manifest.name}' for capability '{implementation_capability}'")
+
+                    implementation_result = implementation_agent.execute_lifecycle(session_id=session_id, node_id=implementation_node_id)
+                    logger.info(f"Agent '{implementation_agent.manifest.name}' lifecycle executed successfully.")
                 except Exception as e:
-                    logger.warning(f"Failed to update session active node to implementation_node: {e}")
+                    logger.error(f"Implementation Agent execution failed: {e}")
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                        except Exception:
+                            pass
+                    raise e
 
-            implementation_agent = self.agent_factory.create_for_capability(
-                capability=implementation_capability,
-                session_id=session_id,
-                node_id=implementation_node_id,
-                session_state=session_state
-            )
-            logger.info(f"Resolved agent '{implementation_agent.manifest.name}' for capability '{implementation_capability}'")
+                session_state.set_node_status(implementation_node_id, "Completed")
+                if implementation_node_id not in session_state._state["workflow_completed_nodes"]:
+                    session_state._state["workflow_completed_nodes"].append(implementation_node_id)
+                next_node = validation_node_id
 
-            implementation_result = implementation_agent.execute_lifecycle(session_id=session_id, node_id=implementation_node_id)
-            logger.info(f"Agent '{implementation_agent.manifest.name}' lifecycle executed successfully.")
-        except Exception as e:
-            logger.error(f"Implementation Agent execution failed: {e}")
-            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+            if next_node == validation_node_id:
+                session_state._state["workflow_active_nodes"] = [validation_node_id]
+                if implementation_result.get("status") != "success":
+                    raise Exception("Implementation Agent execution failed, halting workflow.")
+
+                validation_capability = "runtime_validation_agent"
+                logger.info(f"Resolving specialist agent for capability '{validation_capability}'...")
                 try:
-                    self.brain_client.service.update_session(session_id, {"status": "FAILED"})
-                except Exception:
-                    pass
-            raise e
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"active_node": validation_node_id})
+                        except Exception as e:
+                            logger.warning(f"Failed to update session active node to validation_node: {e}")
 
-        session_state.set_node_status(implementation_node_id, "Completed")
-        session_state._state["workflow_completed_nodes"].append(implementation_node_id)
-        session_state._state["workflow_active_nodes"] = [validation_node_id]
+                    validation_agent = self.agent_factory.create_for_capability(
+                        capability=validation_capability,
+                        session_id=session_id,
+                        node_id=validation_node_id,
+                        session_state=session_state
+                    )
+                    logger.info(f"Resolved agent '{validation_agent.manifest.name}' for capability '{validation_capability}'")
 
-        # 4d. Execute RuntimeValidationAgent through BaseAgent lifecycle
-        if implementation_result.get("status") != "success":
-            raise Exception("Implementation Agent execution failed, halting workflow.")
-
-        validation_capability = "runtime_validation_agent"
-        logger.info(f"Resolving specialist agent for capability '{validation_capability}'...")
-        try:
-            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
-                try:
-                    self.brain_client.service.update_session(session_id, {"active_node": validation_node_id})
+                    validation_result = validation_agent.execute_lifecycle(session_id=session_id, node_id=validation_node_id)
+                    logger.info(f"Agent '{validation_agent.manifest.name}' lifecycle executed successfully.")
                 except Exception as e:
-                    logger.warning(f"Failed to update session active node to validation_node: {e}")
+                    logger.error(f"Runtime Validation Agent execution failed: {e}")
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                        except Exception:
+                            pass
+                    raise e
 
-            validation_agent = self.agent_factory.create_for_capability(
-                capability=validation_capability,
-                session_id=session_id,
-                node_id=validation_node_id,
-                session_state=session_state
-            )
-            logger.info(f"Resolved agent '{validation_agent.manifest.name}' for capability '{validation_capability}'")
+                session_state.set_node_status(validation_node_id, "Completed")
+                if validation_node_id not in session_state._state["workflow_completed_nodes"]:
+                    session_state._state["workflow_completed_nodes"].append(validation_node_id)
+                next_node = evaluation_node_id
 
-            validation_result = validation_agent.execute_lifecycle(session_id=session_id, node_id=validation_node_id)
-            logger.info(f"Agent '{validation_agent.manifest.name}' lifecycle executed successfully.")
-        except Exception as e:
-            logger.error(f"Runtime Validation Agent execution failed: {e}")
-            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+            if next_node == evaluation_node_id:
+                session_state._state["workflow_active_nodes"] = [evaluation_node_id]
+                if validation_result.get("status") != "success":
+                    raise Exception("Runtime Validation Agent execution failed, halting workflow.")
+
+                evaluation_capability = "evaluation_agent"
+                logger.info(f"Resolving specialist agent for capability '{evaluation_capability}'...")
                 try:
-                    self.brain_client.service.update_session(session_id, {"status": "FAILED"})
-                except Exception:
-                    pass
-            raise e
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"active_node": evaluation_node_id})
+                        except Exception as e:
+                            logger.warning(f"Failed to update session active node to evaluation_node: {e}")
 
-        session_state.set_node_status(validation_node_id, "Completed")
-        session_state._state["workflow_completed_nodes"].append(validation_node_id)
-        session_state._state["workflow_active_nodes"] = [evaluation_node_id]
+                    evaluation_agent = self.agent_factory.create_for_capability(
+                        capability=evaluation_capability,
+                        session_id=session_id,
+                        node_id=evaluation_node_id,
+                        session_state=session_state
+                    )
+                    logger.info(f"Resolved agent '{evaluation_agent.manifest.name}' for capability '{evaluation_capability}'")
 
-        # 4e. Execute EvaluationAgent through BaseAgent lifecycle
-        if validation_result.get("status") != "success":
-            raise Exception("Runtime Validation Agent execution failed, halting workflow.")
-
-        evaluation_capability = "evaluation_agent"
-        logger.info(f"Resolving specialist agent for capability '{evaluation_capability}'...")
-        try:
-            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
-                try:
-                    self.brain_client.service.update_session(session_id, {"active_node": evaluation_node_id})
+                    evaluation_result = evaluation_agent.execute_lifecycle(session_id=session_id, node_id=evaluation_node_id)
+                    logger.info(f"Agent '{evaluation_agent.manifest.name}' lifecycle executed successfully.")
                 except Exception as e:
-                    logger.warning(f"Failed to update session active node to evaluation_node: {e}")
+                    logger.error(f"Evaluation Agent execution failed: {e}")
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                        except Exception:
+                            pass
+                    raise e
 
-            evaluation_agent = self.agent_factory.create_for_capability(
-                capability=evaluation_capability,
-                session_id=session_id,
-                node_id=evaluation_node_id,
-                session_state=session_state
-            )
-            logger.info(f"Resolved agent '{evaluation_agent.manifest.name}' for capability '{evaluation_capability}'")
+                session_state.set_node_status(evaluation_node_id, "Completed")
+                if evaluation_node_id not in session_state._state["workflow_completed_nodes"]:
+                    session_state._state["workflow_completed_nodes"].append(evaluation_node_id)
+                next_node = repair_node_id
 
-            evaluation_result = evaluation_agent.execute_lifecycle(session_id=session_id, node_id=evaluation_node_id)
-            logger.info(f"Agent '{evaluation_agent.manifest.name}' lifecycle executed successfully.")
-        except Exception as e:
-            logger.error(f"Evaluation Agent execution failed: {e}")
-            if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+            if next_node == repair_node_id:
+                session_state._state["workflow_active_nodes"] = [repair_node_id]
+                if evaluation_result.get("status") != "success":
+                    raise Exception("Evaluation Agent execution failed, halting workflow.")
+
+                repair_capability = "repair_agent"
+                logger.info(f"Resolving specialist agent for capability '{repair_capability}'...")
                 try:
-                    self.brain_client.service.update_session(session_id, {"status": "FAILED"})
-                except Exception:
-                    pass
-            raise e
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"active_node": repair_node_id})
+                        except Exception as e:
+                            logger.warning(f"Failed to update session active node to repair_node: {e}")
 
-        session_state.set_node_status(evaluation_node_id, "Completed")
-        session_state._state["workflow_completed_nodes"].append(evaluation_node_id)
-        session_state._state["workflow_active_nodes"] = []
+                    repair_agent = self.agent_factory.create_for_capability(
+                        capability=repair_capability,
+                        session_id=session_id,
+                        node_id=repair_node_id,
+                        session_state=session_state
+                    )
+                    logger.info(f"Resolved agent '{repair_agent.manifest.name}' for capability '{repair_capability}'")
+
+                    repair_result = repair_agent.execute_lifecycle(session_id=session_id, node_id=repair_node_id)
+                    logger.info(f"Agent '{repair_agent.manifest.name}' lifecycle executed successfully.")
+                except Exception as e:
+                    logger.error(f"Repair Agent execution failed: {e}")
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                        except Exception:
+                            pass
+                    raise e
+
+                session_state.set_node_status(repair_node_id, "Completed")
+                if repair_node_id not in session_state._state["workflow_completed_nodes"]:
+                    session_state._state["workflow_completed_nodes"].append(repair_node_id)
+                session_state._state["workflow_active_nodes"] = []
+
+                # Read docs/06_repair_decision.json to decide reroute
+                repair_decision = {}
+                try:
+                    decision_content = self._read_workspace_file("docs/06_repair_decision.json")
+                    repair_decision = json.loads(decision_content)
+                except Exception as e:
+                    logger.warning(f"Failed to read repair decision JSON: {e}")
+
+                retry_required = repair_decision.get("retry_required", False)
+                issues_detected = repair_decision.get("issues_detected", [])
+
+                if retry_required and loop_count + 1 < max_loops:
+                    loop_count += 1
+                    
+                    # Conductor Rerouting Rules:
+                    # Rerun implementation_node if structural components are missing
+                    # Rerun validation_node if runtime/validation failures exist
+                    structural_missing = False
+                    for issue in issues_detected:
+                        issue_lower = issue.lower()
+                        if "missing api endpoint" in issue_lower or "missing entity" in issue_lower or "missing service" in issue_lower:
+                            structural_missing = True
+                            break
+
+                    if structural_missing:
+                        next_node = implementation_node_id
+                        logger.info("Structural components missing. Rerunning implementation_node.")
+                    else:
+                        next_node = validation_node_id
+                        logger.info("Runtime/validation failures exist. Rerunning validation_node.")
+
+                    # Reset nodes that will be rerun
+                    nodes_to_reset = []
+                    if next_node == implementation_node_id:
+                        nodes_to_reset = [implementation_node_id, validation_node_id, evaluation_node_id, repair_node_id]
+                    else:
+                        nodes_to_reset = [validation_node_id, evaluation_node_id, repair_node_id]
+
+                    for nid in nodes_to_reset:
+                        if nid in session_state._state["workflow_completed_nodes"]:
+                            session_state._state["workflow_completed_nodes"].remove(nid)
+                        session_state.set_node_status(nid, "Pending")
+                else:
+                    # Exit loop
+                    break
 
         # 5. Persist final session updates and retrieve outcomes from Project Brain
         if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
@@ -347,13 +461,28 @@ class Conductor:
                 blueprint_result.get("status") == "success" and 
                 implementation_result.get("status") == "success" and
                 validation_result.get("status") == "success" and
-                evaluation_result.get("status") == "success"
+                evaluation_result.get("status") == "success" and
+                repair_result.get("status") == "success"
             ) else "failed",
             "state": session_state._state,
             "artifacts": artifacts,
             "decisions": decisions,
-            "metrics": evaluation_result.get("metrics", {})
+            "metrics": repair_result.get("metrics", {})
         }
         logger.info("Final response constructed and returned.")
         return response
+
+    def _read_workspace_file(self, path: str) -> str:
+        if hasattr(self.agent_factory, "mcp_resolver") and self.agent_factory.mcp_resolver:
+            try:
+                res = self.agent_factory.mcp_resolver.call_tool("filesystem", "read_file", {"path": path})
+                if isinstance(res, dict) and "content" in res:
+                    return res["content"]
+                return str(res)
+            except Exception:
+                pass
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        raise Exception(f"File not found: {path}")
 
