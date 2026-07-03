@@ -1,0 +1,145 @@
+{
+    "aud-33ea537d": {
+        "id": "aud-33ea537d",
+        "session_id": "sess-bdc43b56",
+        "timestamp": "2026-07-03T09:07:00.429521+00:00",
+        "agent": "System",
+        "action": "CREATE_SESSION",
+        "details": {
+            "git_commit": "abcdef123"
+        }
+    },
+    "aud-8aa58c9c": {
+        "id": "aud-8aa58c9c",
+        "session_id": "sess-bdc43b56",
+        "timestamp": "2026-07-03T09:07:00.463600+00:00",
+        "agent": "Conductor",
+        "action": "NODE_TRANSITION",
+        "details": {
+            "from_node": "init_node",
+            "to_node": "planning_node"
+        }
+    },
+    "aud-e6ea3d0c": {
+        "id": "aud-e6ea3d0c",
+        "session_id": "sess-bdc43b56",
+        "timestamp": "2026-07-03T09:07:00.484996+00:00",
+        "agent": "Conductor",
+        "action": "STATUS_CHANGE",
+        "details": {
+            "from_status": "IN_PROGRESS",
+            "to_status": "IN_PROGRESS"
+        }
+    },
+    "aud-872249fa": {
+        "id": "aud-872249fa",
+        "session_id": "sess-7b304d44",
+        "timestamp": "2026-07-03T09:07:00.553429+00:00",
+        "agent": "System",
+        "action": "CREATE_SESSION",
+        "details": {
+            "git_commit": null
+        }
+    },
+    "aud-88fce944": {
+        "id": "aud-88fce944",
+        "session_id": "sess-7b304d44",
+        "timestamp": "2026-07-03T09:07:00.630866+00:00",
+        "agent": "Planning Agent",
+        "action": "STORE_ARTIFACT",
+        "details": {
+            "file_path": "01_prd.md",
+            "version": 1,
+            "artifact_id": "art-029dfa31"
+        }
+    },
+    "aud-0c79cf1f": {
+        "id": "aud-0c79cf1f",
+        "session_id": "sess-7b304d44",
+        "timestamp": "2026-07-03T09:07:00.688637+00:00",
+        "agent": "Planning Agent",
+        "action": "STORE_ARTIFACT",
+        "details": {
+            "file_path": "01_prd.md",
+            "version": 2,
+            "artifact_id": "art-1e752315"
+        }
+    },
+    "aud-661b0466": {
+        "id": "aud-661b0466",
+        "session_id": "sess-6d4e4c87",
+        "timestamp": "2026-07-03T09:07:00.775508+00:00",
+        "agent": "System",
+        "action": "CREATE_SESSION",
+        "details": {
+            "git_commit": null
+        }
+    },
+    "aud-fd0b0c8e": {
+        "id": "aud-fd0b0c8e",
+        "session_id": "sess-6d4e4c87",
+        "timestamp": "2026-07-03T09:07:00.866707+00:00",
+        "agent": "Database Design Agent",
+        "action": "STORE_DECISION",
+        "details": {
+            "title": "Use Postgres",
+            "node": "database_design_node",
+            "decision_id": "dec-d38333d7"
+        }
+    },
+    "aud-1be4ec51": {
+        "id": "aud-1be4ec51",
+        "session_id": "sess-fb785a04",
+        "timestamp": "2026-07-03T09:07:01.051055+00:00",
+        "agent": "System",
+        "action": "CREATE_SESSION",
+        "details": {
+            "git_commit": null
+        }
+    },
+    "aud-d4927fd8": {
+        "id": "aud-d4927fd8",
+        "session_id": "sess-fb785a04",
+        "timestamp": "2026-07-03T09:07:01.099465+00:00",
+        "agent": "Evaluator",
+        "action": "QUALITY_GATE_EVALUATION",
+        "details": {
+            "score": 9.1,
+            "passed": true
+        }
+    },
+    "aud-264437fb": {
+        "id": "aud-264437fb",
+        "session_id": "sess-c9978737",
+        "timestamp": "2026-07-03T09:07:01.214859+00:00",
+        "agent": "System",
+        "action": "CREATE_SESSION",
+        "details": {
+            "git_commit": null
+        }
+    },
+    "aud-7056add8": {
+        "id": "aud-7056add8",
+        "session_id": "sess-c9978737",
+        "timestamp": "2026-07-03T09:07:01.244952+00:00",
+        "agent": "Planning Agent",
+        "action": "STORE_DECISION",
+        "details": {
+            "title": "Include tools rental scope",
+            "node": "planning_node",
+            "decision_id": "dec-7911baeb"
+        }
+    },
+    "aud-a77118e3": {
+        "id": "aud-a77118e3",
+        "session_id": "sess-c9978737",
+        "timestamp": "2026-07-03T09:07:01.276080+00:00",
+        "agent": "Planning Agent",
+        "action": "STORE_ARTIFACT",
+        "details": {
+            "file_path": "01_prd.md",
+            "version": 1,
+            "artifact_id": "art-faa56814"
+        }
+    }
+}

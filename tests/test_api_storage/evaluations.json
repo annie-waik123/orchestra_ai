@@ -1,0 +1,34 @@
+{
+    "sess-fb785a04": {
+        "session_id": "sess-fb785a04",
+        "completeness": {
+            "score": 1.0,
+            "details": "all files exist"
+        },
+        "consistency": {
+            "score": 0.9,
+            "details": "minor api warning"
+        },
+        "security": {
+            "score": 1.0,
+            "details": "no issues"
+        },
+        "documentation_quality": {
+            "score": 0.8,
+            "details": "one missing label"
+        },
+        "deployability": {
+            "score": 0.9,
+            "details": "docker clean"
+        },
+        "composite_score": 9.1,
+        "passed": true,
+        "logs": [
+            "Starting checks",
+            "Calculated score: 9.1",
+            "Evaluation passed"
+        ],
+        "findings": [],
+        "evaluated_at": "2026-07-03T09:07:01.097500+00:00"
+    }
+}

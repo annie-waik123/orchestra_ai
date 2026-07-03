@@ -1,0 +1,22 @@
+{
+    "Database Design Agent": {
+        "name": "Database Design Agent",
+        "description": "Designs databases",
+        "status": "active",
+        "system_prompt": "DB prompt",
+        "inputs": [
+            "prd",
+            "architecture"
+        ],
+        "outputs": [
+            "database_schema_details"
+        ],
+        "skills": [
+            "database_modeling"
+        ],
+        "mcp_servers": [
+            "filesystem"
+        ],
+        "registered_at": "2026-07-03T09:07:01.242159+00:00"
+    }
+}

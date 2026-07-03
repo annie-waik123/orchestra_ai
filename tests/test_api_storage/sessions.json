@@ -1,0 +1,87 @@
+{
+    "sess-bdc43b56": {
+        "id": "sess-bdc43b56",
+        "project_id": "proj-cd57207a",
+        "git_commit_hash": "abcdef123",
+        "created_at": "2026-07-03T09:07:00.427587+00:00",
+        "active_node": "planning_node",
+        "status": "IN_PROGRESS",
+        "dag": {
+            "nodes": [
+                {
+                    "id": "init_node",
+                    "name": "Initialize",
+                    "agent": "Conductor",
+                    "status": "COMPLETED",
+                    "updated_at": "2026-07-03T09:07:00.409244Z"
+                },
+                {
+                    "id": "planning_node",
+                    "name": "Planning",
+                    "agent": "Planning Agent",
+                    "status": "PENDING",
+                    "updated_at": "2026-07-03T09:07:00.409253Z"
+                }
+            ],
+            "edges": [
+                {
+                    "source": "init_node",
+                    "target": "planning_node"
+                }
+            ],
+            "history": []
+        }
+    },
+    "sess-7b304d44": {
+        "id": "sess-7b304d44",
+        "project_id": "proj-843b0ce0",
+        "git_commit_hash": null,
+        "created_at": "2026-07-03T09:07:00.526124+00:00",
+        "active_node": "init_node",
+        "status": "IN_PROGRESS",
+        "dag": {
+            "nodes": [],
+            "edges": [],
+            "history": []
+        }
+    },
+    "sess-6d4e4c87": {
+        "id": "sess-6d4e4c87",
+        "project_id": "proj-a02a4595",
+        "git_commit_hash": null,
+        "created_at": "2026-07-03T09:07:00.774335+00:00",
+        "active_node": "init_node",
+        "status": "IN_PROGRESS",
+        "dag": {
+            "nodes": [],
+            "edges": [],
+            "history": []
+        }
+    },
+    "sess-fb785a04": {
+        "id": "sess-fb785a04",
+        "project_id": "proj-55b71bc3",
+        "git_commit_hash": null,
+        "created_at": "2026-07-03T09:07:01.048100+00:00",
+        "active_node": "init_node",
+        "status": "IN_PROGRESS",
+        "dag": {
+            "nodes": [],
+            "edges": [],
+            "history": []
+        }
+    },
+    "sess-c9978737": {
+        "id": "sess-c9978737",
+        "project_id": "proj-c984f8b6",
+        "git_commit_hash": null,
+        "created_at": "2026-07-03T09:07:01.213401+00:00",
+        "active_node": "init_node",
+        "status": "IN_PROGRESS",
+        "dag": {
+            "nodes": [],
+            "edges": [],
+            "history": []
+        }
+    }
+}

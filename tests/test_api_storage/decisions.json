@@ -1,0 +1,35 @@
+{
+    "dec-d38333d7": {
+        "session_id": "sess-6d4e4c87",
+        "node": "database_design_node",
+        "agent": "Database Design Agent",
+        "title": "Use Postgres",
+        "rationale": "For ACID properties",
+        "alternatives_considered": [
+            "MySQL",
+            "MongoDB"
+        ],
+        "confidence_score": 0.9,
+        "dependencies": [],
+        "artifacts_produced": [
+            "05_database_schema.sql"
+        ],
+        "id": "dec-d38333d7",
+        "timestamp": "2026-07-03T09:07:00.864725+00:00"
+    },
+    "dec-7911baeb": {
+        "session_id": "sess-c9978737",
+        "node": "planning_node",
+        "agent": "Planning Agent",
+        "title": "Include tools rental scope",
+        "rationale": "Primary business objective",
+        "confidence_score": 1.0,
+        "alternatives_considered": [],
+        "dependencies": [],
+        "artifacts_produced": [
+            "01_prd.md"
+        ],
+        "id": "dec-7911baeb",
+        "timestamp": "2026-07-03T09:07:01.243509+00:00"
+    }
+}

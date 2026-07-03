@@ -1,0 +1,42 @@
+{
+    "art-029dfa31": {
+        "session_id": "sess-7b304d44",
+        "file_path": "01_prd.md",
+        "checksum": "hash123",
+        "type": "prd",
+        "generated_by": "Planning Agent",
+        "depends_on": [],
+        "used_by": [
+            "System Architecture Agent"
+        ],
+        "id": "art-029dfa31",
+        "version": 1,
+        "created_at": "2026-07-03T09:07:00.629743+00:00"
+    },
+    "art-1e752315": {
+        "session_id": "sess-7b304d44",
+        "file_path": "01_prd.md",
+        "checksum": "hash456",
+        "type": "prd",
+        "generated_by": "Planning Agent",
+        "depends_on": [],
+        "used_by": [
+            "System Architecture Agent"
+        ],
+        "id": "art-1e752315",
+        "version": 2,
+        "created_at": "2026-07-03T09:07:00.687318+00:00"
+    },
+    "art-faa56814": {
+        "session_id": "sess-c9978737",
+        "file_path": "01_prd.md",
+        "checksum": "hash123",
+        "type": "prd",
+        "generated_by": "Planning Agent",
+        "depends_on": [],
+        "used_by": [],
+        "id": "art-faa56814",
+        "version": 1,
+        "created_at": "2026-07-03T09:07:01.274468+00:00"
+    }
+}
