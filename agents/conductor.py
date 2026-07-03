@@ -69,6 +69,13 @@ class Conductor:
         if "prediction_report" not in self.agent_factory.class_registry:
             self.agent_factory.register_agent_class("prediction_report", PredictiveAgent)
 
+        # Ensure OptimizationAgent is registered in factory
+        from agents.optimization import OptimizationAgent
+        if "optimization_agent" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("optimization_agent", OptimizationAgent)
+        if "optimization_report" not in self.agent_factory.class_registry:
+            self.agent_factory.register_agent_class("optimization_report", OptimizationAgent)
+
     def run(self, product_idea: str, project_id: Optional[str] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Main entry point for coordinating a request.
@@ -98,6 +105,7 @@ class Conductor:
         blueprint_node_id = "blueprint_node"
         implementation_node_id = "implementation_node"
         predictive_node_id = "predictive_node"
+        optimization_node_id = "optimization_node"
         validation_node_id = "validation_node"
         evaluation_node_id = "evaluation_node"
         repair_node_id = "repair_node"
@@ -113,6 +121,7 @@ class Conductor:
                             {"id": blueprint_node_id, "name": "Blueprint", "agent": "Blueprint Agent", "status": "PENDING"},
                             {"id": implementation_node_id, "name": "Implementation", "agent": "implementation_agent", "status": "PENDING"},
                             {"id": predictive_node_id, "name": "Predictive", "agent": "predictive_agent", "status": "PENDING"},
+                            {"id": optimization_node_id, "name": "Optimization", "agent": "optimization_agent", "status": "PENDING"},
                             {"id": validation_node_id, "name": "Validation", "agent": "runtime_validation_agent", "status": "PENDING"},
                             {"id": evaluation_node_id, "name": "Evaluation", "agent": "evaluation_agent", "status": "PENDING"},
                             {"id": repair_node_id, "name": "Repair", "agent": "repair_agent", "status": "PENDING"},
@@ -122,7 +131,8 @@ class Conductor:
                             {"source": planning_node_id, "target": blueprint_node_id},
                             {"source": blueprint_node_id, "target": implementation_node_id},
                             {"source": implementation_node_id, "target": predictive_node_id},
-                            {"source": predictive_node_id, "target": validation_node_id},
+                            {"source": predictive_node_id, "target": optimization_node_id},
+                            {"source": optimization_node_id, "target": validation_node_id},
                             {"source": validation_node_id, "target": evaluation_node_id},
                             {"source": evaluation_node_id, "target": repair_node_id},
                             {"source": repair_node_id, "target": learning_node_id}
@@ -150,6 +160,8 @@ class Conductor:
             f"node_{implementation_node_id}_status": "Pending",
             f"node_{predictive_node_id}_task_instruction": "Analyze system design and historical learning data to predict failures before execution",
             f"node_{predictive_node_id}_status": "Pending",
+            f"node_{optimization_node_id}_task_instruction": "Analyze PRD, design, implementation, and prediction report to recommend optimizations",
+            f"node_{optimization_node_id}_status": "Pending",
             f"node_{validation_node_id}_task_instruction": "Validate the generated backend scaffold by executing it inside the sandbox",
             f"node_{validation_node_id}_status": "Pending",
             f"node_{evaluation_node_id}_task_instruction": "Evaluate the pipeline quality using existing artifacts",
@@ -249,6 +261,7 @@ class Conductor:
 
         implementation_result = {"status": "pending"}
         predictive_result = {"status": "pending"}
+        optimization_result = {"status": "pending"}
         validation_result = {"status": "pending"}
         evaluation_result = {"status": "pending"}
         repair_result = {"status": "pending"}
@@ -327,6 +340,44 @@ class Conductor:
                 session_state.set_node_status(predictive_node_id, "Completed")
                 if predictive_node_id not in session_state._state["workflow_completed_nodes"]:
                     session_state._state["workflow_completed_nodes"].append(predictive_node_id)
+                next_node = optimization_node_id
+
+            if next_node == optimization_node_id:
+                session_state._state["workflow_active_nodes"] = [optimization_node_id]
+                if predictive_result.get("status") != "success":
+                    raise Exception("Predictive Agent execution failed, halting workflow.")
+
+                optimization_capability = "optimization_report"
+                logger.info(f"Resolving specialist agent for capability '{optimization_capability}'...")
+                try:
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"active_node": optimization_node_id})
+                        except Exception as e:
+                            logger.warning(f"Failed to update session active node to optimization_node: {e}")
+
+                    optimization_agent = self.agent_factory.create_for_capability(
+                        capability=optimization_capability,
+                        session_id=session_id,
+                        node_id=optimization_node_id,
+                        session_state=session_state
+                    )
+                    logger.info(f"Resolved agent '{optimization_agent.manifest.name}' for capability '{optimization_capability}'")
+
+                    optimization_result = optimization_agent.execute_lifecycle(session_id=session_id, node_id=optimization_node_id)
+                    logger.info(f"Agent '{optimization_agent.manifest.name}' lifecycle executed successfully.")
+                except Exception as e:
+                    logger.error(f"Optimization Agent execution failed: {e}")
+                    if hasattr(self.brain_client, "service") and hasattr(self.brain_client.service, "update_session"):
+                        try:
+                            self.brain_client.service.update_session(session_id, {"status": "FAILED"})
+                        except Exception:
+                            pass
+                    raise e
+
+                session_state.set_node_status(optimization_node_id, "Completed")
+                if optimization_node_id not in session_state._state["workflow_completed_nodes"]:
+                    session_state._state["workflow_completed_nodes"].append(optimization_node_id)
                 next_node = validation_node_id
 
             if next_node == validation_node_id:
@@ -477,7 +528,7 @@ class Conductor:
                     # Reset nodes that will be rerun
                     nodes_to_reset = []
                     if next_node == implementation_node_id:
-                        nodes_to_reset = [implementation_node_id, predictive_node_id, validation_node_id, evaluation_node_id, repair_node_id]
+                        nodes_to_reset = [implementation_node_id, predictive_node_id, optimization_node_id, validation_node_id, evaluation_node_id, repair_node_id]
                     else:
                         nodes_to_reset = [validation_node_id, evaluation_node_id, repair_node_id]
 
@@ -558,6 +609,7 @@ class Conductor:
                 blueprint_result.get("status") == "success" and 
                 implementation_result.get("status") == "success" and
                 predictive_result.get("status") == "success" and
+                optimization_result.get("status") == "success" and
                 validation_result.get("status") == "success" and
                 evaluation_result.get("status") == "success" and
                 repair_result.get("status") == "success" and

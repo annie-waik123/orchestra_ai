@@ -140,6 +140,11 @@ def test_conductor_e2e_flow():
     factory.register_agent_class("predictive_agent", PredictiveAgent)
     predictive_manifest = factory._create_stub_manifest_dict("predictive_agent", ["prediction_report"])
     brain.registered_manifests["predictive_agent"] = predictive_manifest
+
+    from agents.optimization import OptimizationAgent
+    factory.register_agent_class("optimization_agent", OptimizationAgent)
+    optimization_manifest = factory._create_stub_manifest_dict("optimization_agent", ["optimization_report"])
+    brain.registered_manifests["optimization_agent"] = optimization_manifest
     
     # 3. Instantiate Conductor
     conductor = Conductor(brain_client=brain, agent_factory=factory)
@@ -157,8 +162,8 @@ def test_conductor_e2e_flow():
     assert response["session_id"] == "sess_test_123"
     assert response["project_id"] == "proj_test_123"
     
-    # 8 artifacts: Planning, Blueprint, Implementation, Predictive, Validation, Evaluation, Repair, Learning
-    assert len(response["artifacts"]) == 8
+    # 9 artifacts: Planning, Blueprint, Implementation, Predictive, Optimization, Validation, Evaluation, Repair, Learning
+    assert len(response["artifacts"]) == 9
     
     prd_artifact = next(a for a in response["artifacts"] if a["type"] == "prd")
     assert prd_artifact["generated_by"] == "Planning Agent"
@@ -187,6 +192,10 @@ def test_conductor_e2e_flow():
     assert predictive_artifact["generated_by"] == "predictive_agent"
     assert predictive_artifact["file_path"] == "docs/08_prediction_report.json"
 
+    optimization_artifact = next(a for a in response["artifacts"] if a["type"] == "optimization_report")
+    assert optimization_artifact["generated_by"] == "optimization_agent"
+    assert optimization_artifact["file_path"] == "docs/09_optimization_report.json"
+
     learning_artifact = next(a for a in response["artifacts"] if a["type"] == "learning_report")
     assert learning_artifact["generated_by"] == "learning_agent"
     assert learning_artifact["file_path"] == "docs/07_learning_report.json"
@@ -207,7 +216,7 @@ def test_conductor_e2e_flow():
     assert repair_artifact["file_path"] in learning_artifact["depends_on"]
     
     # 8. Verify decision records are stored in Project Brain
-    # Note: Learning Agent does not produce decision records, so total remains 6
+    # Note: Learning Agent and Optimization Agent do not produce decision records, so total remains 6
     assert len(response["decisions"]) == 6
     planning_dec = next(d for d in response["decisions"] if d["agent"] == "Planning Agent")
     assert planning_dec["title"] == "Adopt standard modular workspace"
@@ -246,6 +255,9 @@ def test_conductor_e2e_flow():
  
     assert state["node_repair_node_status"] == "Completed"
     assert state["node_repair_node_outputs"] == ["repair_decision"]
+
+    assert state["node_optimization_node_status"] == "Completed"
+    assert state["node_optimization_node_outputs"] == ["optimization_report"]
 
     assert state["node_learning_node_status"] == "Completed"
     assert state["node_learning_node_outputs"] == ["learning_report"]

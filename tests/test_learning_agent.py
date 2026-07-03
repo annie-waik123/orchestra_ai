@@ -296,8 +296,8 @@ def test_conductor_learning_integration():
     assert response["status"] == "success"
     assert response["session_id"] == "sess_integrate_123"
     
-    # 8 artifacts: Planning, Blueprint, Implementation, Predictive, Validation, Evaluation, Repair, Learning
-    assert len(response["artifacts"]) == 8
+    # 9 artifacts: Planning, Blueprint, Implementation, Predictive, Optimization, Validation, Evaluation, Repair, Learning
+    assert len(response["artifacts"]) == 9
     
     learning_artifact = next(a for a in response["artifacts"] if a["type"] == "learning_report")
     assert learning_artifact["generated_by"] == "learning_agent"

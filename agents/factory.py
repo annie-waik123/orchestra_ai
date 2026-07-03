@@ -127,6 +127,14 @@ class AgentFactory:
                 {"artifact_type": "system_design", "required": True},
                 {"artifact_type": "learning_report", "required": False}
             ]
+        elif name in ["optimization_agent", "OptimizationAgent"]:
+            inputs = [
+                {"artifact_type": "prd", "required": True},
+                {"artifact_type": "system_design", "required": True},
+                {"artifact_type": "backend_scaffold", "required": True},
+                {"artifact_type": "learning_report", "required": False},
+                {"artifact_type": "prediction_report", "required": False}
+            ]
             
         outputs = []
         for c in capabilities:
@@ -144,6 +152,8 @@ class AgentFactory:
                 art_type = "learning_report"
             elif c in ["predictive_agent", "prediction_report"]:
                 art_type = "prediction_report"
+            elif c in ["optimization_agent", "optimization_report"]:
+                art_type = "optimization_report"
             else:
                 art_type = c
 
@@ -153,7 +163,9 @@ class AgentFactory:
                         "docs/05_evaluation_report.md" if art_type == "evaluation_report" else (
                             "docs/06_repair_decision.json" if art_type == "repair_decision" else (
                                 "docs/07_learning_report.json" if art_type == "learning_report" else (
-                                    "docs/08_prediction_report.json" if art_type == "prediction_report" else f"{art_type}.md"
+                                    "docs/08_prediction_report.json" if art_type == "prediction_report" else (
+                                        "docs/09_optimization_report.json" if art_type == "optimization_report" else f"{art_type}.md"
+                                    )
                                 )
                             )
                         )
