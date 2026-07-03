@@ -1,6 +1,105 @@
 {
-    "dec-d38333d7": {
-        "session_id": "sess-6d4e4c87",
+    "dec-91c27d53": {
+        "session_id": "sess-5767eb5a",
+        "node": "planning_node",
+        "agent": "Planning Agent",
+        "title": "Adopt standard modular workspace",
+        "rationale": "Enforces clean separation of concerns and facilitates testing",
+        "confidence_score": 0.95,
+        "alternatives_considered": [
+            "Monolithic file structure"
+        ],
+        "dependencies": [],
+        "artifacts_produced": [
+            "docs/01_prd.md"
+        ],
+        "id": "dec-91c27d53",
+        "timestamp": "2026-07-03T09:29:43.874366+00:00"
+    },
+    "dec-1cdb2168": {
+        "session_id": "sess-5767eb5a",
+        "node": "blueprint_node",
+        "agent": "Blueprint Agent",
+        "title": "Adopt microservices architecture",
+        "rationale": "Enables independent scalability of user, order, and delivery services.",
+        "confidence_score": 0.9,
+        "alternatives_considered": [
+            "Monolithic architecture"
+        ],
+        "dependencies": [],
+        "artifacts_produced": [
+            "docs/02_system_design.md"
+        ],
+        "id": "dec-1cdb2168",
+        "timestamp": "2026-07-03T09:29:44.085171+00:00"
+    },
+    "dec-7f82ae4f": {
+        "session_id": "sess-5767eb5a",
+        "node": "implementation_node",
+        "agent": "implementation_agent",
+        "title": "FastAPI project structure mapping rules",
+        "rationale": "Separates API routing, models, services, configuration, and db connection into structured layers for high maintainability.",
+        "confidence_score": 0.95,
+        "alternatives_considered": [
+            "Monolithic app.py structure"
+        ],
+        "dependencies": [],
+        "artifacts_produced": [
+            "docs/03_backend_scaffold.md"
+        ],
+        "id": "dec-7f82ae4f",
+        "timestamp": "2026-07-03T09:29:44.718965+00:00"
+    },
+    "dec-92acee84": {
+        "session_id": "sess-5767eb5a",
+        "node": "validation_node",
+        "agent": "runtime_validation_agent",
+        "title": "Runtime execution validation in isolated sandbox",
+        "rationale": "Executes generated code in an isolated sandbox to perform syntax and schema checks without risking the host environment.",
+        "confidence_score": 0.98,
+        "alternatives_considered": [
+            "Static analysis only",
+            "Running code on host system"
+        ],
+        "dependencies": [],
+        "artifacts_produced": [
+            "docs/04_execution_report.md"
+        ],
+        "id": "dec-92acee84",
+        "timestamp": "2026-07-03T09:29:47.877655+00:00"
+    },
+    "dec-6ca280c7": {
+        "session_id": "sess-5767eb5a",
+        "node": "evaluation_node",
+        "agent": "evaluation_agent",
+        "title": "Pipeline execution quality evaluation gate",
+        "rationale": "Determines pipeline quality and verification scores strictly from collected verification artifacts and metadata.",
+        "confidence_score": 1.0,
+        "alternatives_considered": [],
+        "dependencies": [],
+        "artifacts_produced": [
+            "docs/05_evaluation_report.md"
+        ],
+        "id": "dec-6ca280c7",
+        "timestamp": "2026-07-03T09:29:48.548937+00:00"
+    },
+    "dec-1a6943c1": {
+        "session_id": "sess-5767eb5a",
+        "node": "repair_node",
+        "agent": "repair_agent",
+        "title": "Surgical backend repair decision",
+        "rationale": "Deterministic diagnosis and execution of targeted repairs based on validation issues, preventing speculative regenerations.",
+        "confidence_score": 0.99,
+        "alternatives_considered": [],
+        "dependencies": [],
+        "artifacts_produced": [
+            "docs/06_repair_decision.json"
+        ],
+        "id": "dec-1a6943c1",
+        "timestamp": "2026-07-03T09:29:48.902838+00:00"
+    },
+    "dec-b35c1b3c": {
+        "session_id": "sess-1b6c0d3a",
         "node": "database_design_node",
         "agent": "Database Design Agent",
         "title": "Use Postgres",
@@ -14,11 +113,11 @@
         "artifacts_produced": [
             "05_database_schema.sql"
         ],
-        "id": "dec-d38333d7",
-        "timestamp": "2026-07-03T09:07:00.864725+00:00"
+        "id": "dec-b35c1b3c",
+        "timestamp": "2026-07-03T09:29:49.328305+00:00"
     },
-    "dec-7911baeb": {
-        "session_id": "sess-c9978737",
+    "dec-5df42055": {
+        "session_id": "sess-a2ee44e4",
         "node": "planning_node",
         "agent": "Planning Agent",
         "title": "Include tools rental scope",
@@ -29,7 +128,7 @@
         "artifacts_produced": [
             "01_prd.md"
         ],
-        "id": "dec-7911baeb",
-        "timestamp": "2026-07-03T09:07:01.243509+00:00"
+        "id": "dec-5df42055",
+        "timestamp": "2026-07-03T09:29:49.723222+00:00"
     }
 }

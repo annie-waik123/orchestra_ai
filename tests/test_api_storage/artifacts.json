@@ -1,6 +1,126 @@
 {
-    "art-029dfa31": {
-        "session_id": "sess-7b304d44",
+    "art-ed466db9": {
+        "session_id": "sess-5767eb5a",
+        "file_path": "docs/01_prd.md",
+        "checksum": "286cb918dc5dda2efa67d05912808771aaa83b7d8cb4a3bbc354f04887943f6d",
+        "type": "prd",
+        "generated_by": "Planning Agent",
+        "depends_on": [],
+        "used_by": [],
+        "id": "art-ed466db9",
+        "version": 1,
+        "created_at": "2026-07-03T09:29:43.843961+00:00"
+    },
+    "art-948c0072": {
+        "session_id": "sess-5767eb5a",
+        "file_path": "docs/02_system_design.md",
+        "checksum": "d2ecf26bc91b3010fe8a08be840c035060ad59831c9b5fda2e9c8263e9c9960b",
+        "type": "system_design",
+        "generated_by": "Blueprint Agent",
+        "depends_on": [
+            "docs/01_prd.md"
+        ],
+        "used_by": [],
+        "id": "art-948c0072",
+        "version": 1,
+        "created_at": "2026-07-03T09:29:44.049270+00:00"
+    },
+    "art-75cb440f": {
+        "session_id": "sess-5767eb5a",
+        "file_path": "docs/03_backend_scaffold.md",
+        "checksum": "1cd8c043a10e1c7e0e61f6afa6b8ff841e83750744aa7894a64edde2869a1771",
+        "type": "backend_scaffold",
+        "generated_by": "implementation_agent",
+        "depends_on": [
+            "docs/02_system_design.md"
+        ],
+        "used_by": [],
+        "id": "art-75cb440f",
+        "version": 1,
+        "created_at": "2026-07-03T09:29:44.676743+00:00"
+    },
+    "art-1b36a7aa": {
+        "session_id": "sess-5767eb5a",
+        "file_path": "docs/08_prediction_report.json",
+        "checksum": "21a371c03c5693c1e285b0bae3caf2dc823eca83b21a90f68af2d636edff2c3c",
+        "type": "prediction_report",
+        "generated_by": "predictive_agent",
+        "depends_on": [
+            "docs/01_prd.md",
+            "docs/02_system_design.md"
+        ],
+        "used_by": [],
+        "id": "art-1b36a7aa",
+        "version": 1,
+        "created_at": "2026-07-03T09:29:45.495730+00:00"
+    },
+    "art-2697c9a4": {
+        "session_id": "sess-5767eb5a",
+        "file_path": "docs/09_optimization_report.json",
+        "checksum": "01de806887171f00bf161e6b7f475fb0245201704a258ab74cd4ab6ac03b7bbb",
+        "type": "optimization_report",
+        "generated_by": "optimization_agent",
+        "depends_on": [
+            "docs/03_backend_scaffold.md",
+            "docs/01_prd.md",
+            "docs/02_system_design.md",
+            "docs/08_prediction_report.json"
+        ],
+        "used_by": [],
+        "id": "art-2697c9a4",
+        "version": 1,
+        "created_at": "2026-07-03T09:29:46.555201+00:00"
+    },
+    "art-d762a60d": {
+        "session_id": "sess-5767eb5a",
+        "file_path": "docs/04_execution_report.md",
+        "checksum": "90fd73f27c534b050ee07fe052a68ba2568ea375b24217f8cac21dbb69da5aaa",
+        "type": "execution_report",
+        "generated_by": "runtime_validation_agent",
+        "depends_on": [
+            "docs/03_backend_scaffold.md"
+        ],
+        "used_by": [],
+        "id": "art-d762a60d",
+        "version": 1,
+        "created_at": "2026-07-03T09:29:47.599790+00:00"
+    },
+    "art-ca83d6c4": {
+        "session_id": "sess-5767eb5a",
+        "file_path": "docs/05_evaluation_report.md",
+        "checksum": "8cbde19477086311a448c3e44384b5fc94f4046c36ec41192fc8d17aa6c7bd2a",
+        "type": "evaluation_report",
+        "generated_by": "evaluation_agent",
+        "depends_on": [
+            "docs/03_backend_scaffold.md",
+            "docs/01_prd.md",
+            "docs/04_execution_report.md",
+            "docs/02_system_design.md"
+        ],
+        "used_by": [],
+        "id": "art-ca83d6c4",
+        "version": 1,
+        "created_at": "2026-07-03T09:29:48.511411+00:00"
+    },
+    "art-443db56c": {
+        "session_id": "sess-5767eb5a",
+        "file_path": "docs/06_repair_decision.json",
+        "checksum": "5d825b284f86b592a815bf163b8e7ed676c39aa2bba8c3c44e2bf50eb8f53df0",
+        "type": "repair_decision",
+        "generated_by": "repair_agent",
+        "depends_on": [
+            "docs/03_backend_scaffold.md",
+            "docs/04_execution_report.md",
+            "docs/02_system_design.md",
+            "docs/05_evaluation_report.md"
+        ],
+        "used_by": [],
+        "id": "art-443db56c",
+        "version": 1,
+        "created_at": "2026-07-03T09:29:48.860053+00:00"
+    },
+    "art-f67f8406": {
+        "session_id": "sess-326c4d8a",
         "file_path": "01_prd.md",
         "checksum": "hash123",
         "type": "prd",
@@ -9,12 +129,12 @@
         "used_by": [
             "System Architecture Agent"
         ],
-        "id": "art-029dfa31",
+        "id": "art-f67f8406",
         "version": 1,
-        "created_at": "2026-07-03T09:07:00.629743+00:00"
+        "created_at": "2026-07-03T09:29:49.073736+00:00"
     },
-    "art-1e752315": {
-        "session_id": "sess-7b304d44",
+    "art-433cc4ee": {
+        "session_id": "sess-326c4d8a",
         "file_path": "01_prd.md",
         "checksum": "hash456",
         "type": "prd",
@@ -23,20 +143,36 @@
         "used_by": [
             "System Architecture Agent"
         ],
-        "id": "art-1e752315",
+        "id": "art-433cc4ee",
         "version": 2,
-        "created_at": "2026-07-03T09:07:00.687318+00:00"
+        "created_at": "2026-07-03T09:29:49.123383+00:00"
     },
-    "art-faa56814": {
-        "session_id": "sess-c9978737",
+    "art-6d2999a3": {
+        "session_id": "sess-5767eb5a",
+        "file_path": "docs/07_learning_report.json",
+        "checksum": "079309dcd9c88ae8196cda92b03c6a1f0df6a716724cd79553da45135f0c8dcc",
+        "type": "learning_report",
+        "generated_by": "learning_agent",
+        "depends_on": [
+            "docs/05_evaluation_report.md",
+            "docs/04_execution_report.md",
+            "docs/06_repair_decision.json"
+        ],
+        "used_by": [],
+        "id": "art-6d2999a3",
+        "version": 1,
+        "created_at": "2026-07-03T09:29:49.252101+00:00"
+    },
+    "art-3bddd90f": {
+        "session_id": "sess-a2ee44e4",
         "file_path": "01_prd.md",
         "checksum": "hash123",
         "type": "prd",
         "generated_by": "Planning Agent",
         "depends_on": [],
         "used_by": [],
-        "id": "art-faa56814",
+        "id": "art-3bddd90f",
         "version": 1,
-        "created_at": "2026-07-03T09:07:01.274468+00:00"
+        "created_at": "2026-07-03T09:29:49.758653+00:00"
     }
 }

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 # Set environment variables for testing before importing
 os.environ["ORCHESTRA_TEST_MODE"] = "true"
-TEST_STORAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_api_storage")
+TEST_STORAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_storage")
 os.environ["ORCHESTRA_STORAGE_DIR"] = TEST_STORAGE_DIR
 
 from app.main import app

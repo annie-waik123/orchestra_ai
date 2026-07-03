@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  brain:
+    build:
+      context: ../..
+      dockerfile: docker/api/Dockerfile
+    command: uvicorn brain.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - brain-storage:/workspace/brain/storage
+      - logs-dir:/workspace/logs
+    environment:
+      - ORCHESTRA_STORAGE_DIR=/workspace/brain/storage
+      - ORCHESTRA_LOGS_DIR=/workspace/logs
+    networks:
+      - orchestra-net
+
+  api:
+    build:
+      context: ../..
+      dockerfile: docker/api/Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - brain-storage:/workspace/brain/storage
+      - logs-dir:/workspace/logs
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ORCHESTRA_STORAGE_DIR=/workspace/brain/storage
+      - ORCHESTRA_LOGS_DIR=/workspace/logs
+      - ORCHESTRA_DOCKER_SANDBOX=true
+    depends_on:
+      - brain
+    networks:
+      - orchestra-net
+
+volumes:
+  brain-storage:
+  logs-dir:
+
+networks:
+  orchestra-net:
+    driver: bridge

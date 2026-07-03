@@ -1,4 +1,415 @@
 {
+    "Planning Agent": {
+        "schema_version": "1.0",
+        "version": "1.0.0",
+        "name": "Planning Agent",
+        "description": "Stub manifest for Planning Agent",
+        "mission": "Execute tasks for Planning Agent",
+        "capabilities": {
+            "produces": [
+                "prd"
+            ]
+        },
+        "inputs": [],
+        "outputs": [
+            {
+                "artifact_type": "prd",
+                "file_path_pattern": "prd.md"
+            }
+        ],
+        "allowed_mcp_servers": [
+            "filesystem",
+            "sandbox",
+            "developer_knowledge"
+        ],
+        "retry_policy": {
+            "base_delay_seconds": 1,
+            "max_retries": 2,
+            "exponential_factor": 1.5,
+            "escalate_on_exhaustion": true
+        },
+        "compatibility": {
+            "min_framework_version": "1.0.0"
+        },
+        "status": "active",
+        "registered_at": "2026-07-03T09:29:43.368129+00:00"
+    },
+    "Blueprint Agent": {
+        "schema_version": "1.0",
+        "version": "1.0.0",
+        "name": "Blueprint Agent",
+        "description": "Stub manifest for Blueprint Agent",
+        "mission": "Execute tasks for Blueprint Agent",
+        "capabilities": {
+            "produces": [
+                "blueprint_agent"
+            ]
+        },
+        "inputs": [
+            {
+                "artifact_type": "prd",
+                "required": true
+            }
+        ],
+        "outputs": [
+            {
+                "artifact_type": "system_design",
+                "file_path_pattern": "docs/02_system_design.md"
+            }
+        ],
+        "allowed_mcp_servers": [
+            "filesystem",
+            "sandbox",
+            "developer_knowledge"
+        ],
+        "retry_policy": {
+            "base_delay_seconds": 1,
+            "max_retries": 2,
+            "exponential_factor": 1.5,
+            "escalate_on_exhaustion": true
+        },
+        "compatibility": {
+            "min_framework_version": "1.0.0"
+        },
+        "status": "active",
+        "registered_at": "2026-07-03T09:29:43.369469+00:00"
+    },
+    "implementation_agent": {
+        "schema_version": "1.0",
+        "version": "1.0.0",
+        "name": "implementation_agent",
+        "description": "Stub manifest for implementation_agent",
+        "mission": "Execute tasks for implementation_agent",
+        "capabilities": {
+            "produces": [
+                "implementation_agent"
+            ]
+        },
+        "inputs": [
+            {
+                "artifact_type": "system_design",
+                "required": true
+            }
+        ],
+        "outputs": [
+            {
+                "artifact_type": "backend_scaffold",
+                "file_path_pattern": "docs/03_backend_scaffold.md"
+            }
+        ],
+        "allowed_mcp_servers": [
+            "filesystem",
+            "sandbox",
+            "developer_knowledge"
+        ],
+        "retry_policy": {
+            "base_delay_seconds": 1,
+            "max_retries": 2,
+            "exponential_factor": 1.5,
+            "escalate_on_exhaustion": true
+        },
+        "compatibility": {
+            "min_framework_version": "1.0.0"
+        },
+        "status": "active",
+        "registered_at": "2026-07-03T09:29:43.394092+00:00"
+    },
+    "runtime_validation_agent": {
+        "schema_version": "1.0",
+        "version": "1.0.0",
+        "name": "runtime_validation_agent",
+        "description": "Stub manifest for runtime_validation_agent",
+        "mission": "Execute tasks for runtime_validation_agent",
+        "capabilities": {
+            "produces": [
+                "runtime_validation_agent"
+            ]
+        },
+        "inputs": [
+            {
+                "artifact_type": "backend_scaffold",
+                "required": true
+            }
+        ],
+        "outputs": [
+            {
+                "artifact_type": "execution_report",
+                "file_path_pattern": "docs/04_execution_report.md"
+            }
+        ],
+        "allowed_mcp_servers": [
+            "filesystem",
+            "sandbox",
+            "developer_knowledge"
+        ],
+        "retry_policy": {
+            "base_delay_seconds": 1,
+            "max_retries": 2,
+            "exponential_factor": 1.5,
+            "escalate_on_exhaustion": true
+        },
+        "compatibility": {
+            "min_framework_version": "1.0.0"
+        },
+        "status": "active",
+        "registered_at": "2026-07-03T09:29:43.422064+00:00"
+    },
+    "evaluation_agent": {
+        "schema_version": "1.0",
+        "version": "1.0.0",
+        "name": "evaluation_agent",
+        "description": "Stub manifest for evaluation_agent",
+        "mission": "Execute tasks for evaluation_agent",
+        "capabilities": {
+            "produces": [
+                "evaluation_agent"
+            ]
+        },
+        "inputs": [
+            {
+                "artifact_type": "prd",
+                "required": true
+            },
+            {
+                "artifact_type": "system_design",
+                "required": true
+            },
+            {
+                "artifact_type": "backend_scaffold",
+                "required": true
+            },
+            {
+                "artifact_type": "execution_report",
+                "required": true
+            }
+        ],
+        "outputs": [
+            {
+                "artifact_type": "evaluation_report",
+                "file_path_pattern": "docs/05_evaluation_report.md"
+            }
+        ],
+        "allowed_mcp_servers": [
+            "filesystem",
+            "sandbox",
+            "developer_knowledge"
+        ],
+        "retry_policy": {
+            "base_delay_seconds": 1,
+            "max_retries": 2,
+            "exponential_factor": 1.5,
+            "escalate_on_exhaustion": true
+        },
+        "compatibility": {
+            "min_framework_version": "1.0.0"
+        },
+        "status": "active",
+        "registered_at": "2026-07-03T09:29:43.451366+00:00"
+    },
+    "repair_agent": {
+        "schema_version": "1.0",
+        "version": "1.0.0",
+        "name": "repair_agent",
+        "description": "Stub manifest for repair_agent",
+        "mission": "Execute tasks for repair_agent",
+        "capabilities": {
+            "produces": [
+                "repair_agent"
+            ]
+        },
+        "inputs": [
+            {
+                "artifact_type": "system_design",
+                "required": true
+            },
+            {
+                "artifact_type": "backend_scaffold",
+                "required": true
+            },
+            {
+                "artifact_type": "execution_report",
+                "required": true
+            },
+            {
+                "artifact_type": "evaluation_report",
+                "required": true
+            }
+        ],
+        "outputs": [
+            {
+                "artifact_type": "repair_decision",
+                "file_path_pattern": "docs/06_repair_decision.json"
+            }
+        ],
+        "allowed_mcp_servers": [
+            "filesystem",
+            "sandbox",
+            "developer_knowledge"
+        ],
+        "retry_policy": {
+            "base_delay_seconds": 1,
+            "max_retries": 2,
+            "exponential_factor": 1.5,
+            "escalate_on_exhaustion": true
+        },
+        "compatibility": {
+            "min_framework_version": "1.0.0"
+        },
+        "status": "active",
+        "registered_at": "2026-07-03T09:29:43.476715+00:00"
+    },
+    "learning_agent": {
+        "schema_version": "1.0",
+        "version": "1.0.0",
+        "name": "learning_agent",
+        "description": "Stub manifest for learning_agent",
+        "mission": "Execute tasks for learning_agent",
+        "capabilities": {
+            "produces": [
+                "learning_agent"
+            ]
+        },
+        "inputs": [
+            {
+                "artifact_type": "execution_report",
+                "required": true
+            },
+            {
+                "artifact_type": "evaluation_report",
+                "required": true
+            },
+            {
+                "artifact_type": "repair_decision",
+                "required": true
+            }
+        ],
+        "outputs": [
+            {
+                "artifact_type": "learning_report",
+                "file_path_pattern": "docs/07_learning_report.json"
+            }
+        ],
+        "allowed_mcp_servers": [
+            "filesystem",
+            "sandbox",
+            "developer_knowledge"
+        ],
+        "retry_policy": {
+            "base_delay_seconds": 1,
+            "max_retries": 2,
+            "exponential_factor": 1.5,
+            "escalate_on_exhaustion": true
+        },
+        "compatibility": {
+            "min_framework_version": "1.0.0"
+        },
+        "status": "active",
+        "registered_at": "2026-07-03T09:29:43.511539+00:00"
+    },
+    "predictive_agent": {
+        "schema_version": "1.0",
+        "version": "1.0.0",
+        "name": "predictive_agent",
+        "description": "Stub manifest for predictive_agent",
+        "mission": "Execute tasks for predictive_agent",
+        "capabilities": {
+            "produces": [
+                "prediction_report"
+            ]
+        },
+        "inputs": [
+            {
+                "artifact_type": "prd",
+                "required": true
+            },
+            {
+                "artifact_type": "system_design",
+                "required": true
+            },
+            {
+                "artifact_type": "learning_report",
+                "required": false
+            }
+        ],
+        "outputs": [
+            {
+                "artifact_type": "prediction_report",
+                "file_path_pattern": "docs/08_prediction_report.json"
+            }
+        ],
+        "allowed_mcp_servers": [
+            "filesystem",
+            "sandbox",
+            "developer_knowledge"
+        ],
+        "retry_policy": {
+            "base_delay_seconds": 1,
+            "max_retries": 2,
+            "exponential_factor": 1.5,
+            "escalate_on_exhaustion": true
+        },
+        "compatibility": {
+            "min_framework_version": "1.0.0"
+        },
+        "status": "active",
+        "registered_at": "2026-07-03T09:29:43.543370+00:00"
+    },
+    "optimization_agent": {
+        "schema_version": "1.0",
+        "version": "1.0.0",
+        "name": "optimization_agent",
+        "description": "Stub manifest for optimization_agent",
+        "mission": "Execute tasks for optimization_agent",
+        "capabilities": {
+            "produces": [
+                "optimization_report"
+            ]
+        },
+        "inputs": [
+            {
+                "artifact_type": "prd",
+                "required": true
+            },
+            {
+                "artifact_type": "system_design",
+                "required": true
+            },
+            {
+                "artifact_type": "backend_scaffold",
+                "required": true
+            },
+            {
+                "artifact_type": "learning_report",
+                "required": false
+            },
+            {
+                "artifact_type": "prediction_report",
+                "required": false
+            }
+        ],
+        "outputs": [
+            {
+                "artifact_type": "optimization_report",
+                "file_path_pattern": "docs/09_optimization_report.json"
+            }
+        ],
+        "allowed_mcp_servers": [
+            "filesystem",
+            "sandbox",
+            "developer_knowledge"
+        ],
+        "retry_policy": {
+            "base_delay_seconds": 1,
+            "max_retries": 2,
+            "exponential_factor": 1.5,
+            "escalate_on_exhaustion": true
+        },
+        "compatibility": {
+            "min_framework_version": "1.0.0"
+        },
+        "status": "active",
+        "registered_at": "2026-07-03T09:29:43.573460+00:00"
+    },
     "Database Design Agent": {
         "name": "Database Design Agent",
         "description": "Designs databases",
@@ -17,6 +428,6 @@
         "mcp_servers": [
             "filesystem"
         ],
-        "registered_at": "2026-07-03T09:07:01.242159+00:00"
+        "registered_at": "2026-07-03T09:29:49.718413+00:00"
     }
 }

@@ -20,6 +20,9 @@ class ToolManager:
         self.mcp_client_resolver = mcp_client_resolver
         self._is_open = False
         
+        from agents.sandbox_manager import DockerSandboxManager
+        self.sandbox_manager = DockerSandboxManager()
+        
         # Verify allowed servers mappings
         # (Capabilities map directly to required servers)
         self._server_map = {
@@ -107,7 +110,30 @@ class ToolManager:
         return []
 
     def execute_in_sandbox(self, command: str, files: Dict[str, str]) -> Dict[str, Any]:
-        """Runs isolated execution shell via Sandbox MCP."""
+        """Runs isolated execution shell via Sandbox MCP or Docker sandbox."""
+        self._check_allowed("execute_in_sandbox")
+        
+        if self.sandbox_manager.is_enabled():
+            import time
+            start_time = time.time()
+            success = False
+            try:
+                result = self.sandbox_manager.execute(command, files)
+                success = result.get("status") == "success"
+                return result
+            except Exception as e:
+                # Lazy import ToolError to avoid circular import issues
+                from agents.models import ToolError
+                raise ToolError(
+                    capability="execute_in_sandbox",
+                    server="sandbox",
+                    cause=f"Docker sandbox execution failed: {e}",
+                    recoverable_hint=False
+                ) from e
+            finally:
+                latency = (time.time() - start_time) * 1000.0
+                self.metrics.record_tool_call("execute_in_sandbox", latency, success)
+
         res = self._execute_tool_call("execute_in_sandbox", "sandbox", "execute_command", {"command": command, "files": files})
         if isinstance(res, dict):
             return res

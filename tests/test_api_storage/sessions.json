@@ -1,9 +1,110 @@
 {
-    "sess-bdc43b56": {
-        "id": "sess-bdc43b56",
-        "project_id": "proj-cd57207a",
+    "sess-5767eb5a": {
+        "id": "sess-5767eb5a",
+        "project_id": "proj-3d6113ab",
+        "git_commit_hash": null,
+        "created_at": "2026-07-03T09:29:43.689754+00:00",
+        "active_node": "learning_node",
+        "status": "COMPLETED",
+        "dag": {
+            "nodes": [
+                {
+                    "id": "planning_node",
+                    "name": "Planning",
+                    "agent": "Planning Agent",
+                    "status": "PENDING"
+                },
+                {
+                    "id": "blueprint_node",
+                    "name": "Blueprint",
+                    "agent": "Blueprint Agent",
+                    "status": "PENDING"
+                },
+                {
+                    "id": "implementation_node",
+                    "name": "Implementation",
+                    "agent": "implementation_agent",
+                    "status": "PENDING"
+                },
+                {
+                    "id": "predictive_node",
+                    "name": "Predictive",
+                    "agent": "predictive_agent",
+                    "status": "PENDING"
+                },
+                {
+                    "id": "optimization_node",
+                    "name": "Optimization",
+                    "agent": "optimization_agent",
+                    "status": "PENDING"
+                },
+                {
+                    "id": "validation_node",
+                    "name": "Validation",
+                    "agent": "runtime_validation_agent",
+                    "status": "PENDING"
+                },
+                {
+                    "id": "evaluation_node",
+                    "name": "Evaluation",
+                    "agent": "evaluation_agent",
+                    "status": "PENDING"
+                },
+                {
+                    "id": "repair_node",
+                    "name": "Repair",
+                    "agent": "repair_agent",
+                    "status": "PENDING"
+                },
+                {
+                    "id": "learning_node",
+                    "name": "Learning",
+                    "agent": "learning_agent",
+                    "status": "PENDING"
+                }
+            ],
+            "edges": [
+                {
+                    "source": "planning_node",
+                    "target": "blueprint_node"
+                },
+                {
+                    "source": "blueprint_node",
+                    "target": "implementation_node"
+                },
+                {
+                    "source": "implementation_node",
+                    "target": "predictive_node"
+                },
+                {
+                    "source": "predictive_node",
+                    "target": "optimization_node"
+                },
+                {
+                    "source": "optimization_node",
+                    "target": "validation_node"
+                },
+                {
+                    "source": "validation_node",
+                    "target": "evaluation_node"
+                },
+                {
+                    "source": "evaluation_node",
+                    "target": "repair_node"
+                },
+                {
+                    "source": "repair_node",
+                    "target": "learning_node"
+                }
+            ],
+            "history": []
+        }
+    },
+    "sess-1457dd7b": {
+        "id": "sess-1457dd7b",
+        "project_id": "proj-5b60a202",
         "git_commit_hash": "abcdef123",
-        "created_at": "2026-07-03T09:07:00.427587+00:00",
+        "created_at": "2026-07-03T09:29:48.790618+00:00",
         "active_node": "planning_node",
         "status": "IN_PROGRESS",
         "dag": {
@@ -13,14 +114,14 @@
                     "name": "Initialize",
                     "agent": "Conductor",
                     "status": "COMPLETED",
-                    "updated_at": "2026-07-03T09:07:00.409244Z"
+                    "updated_at": "2026-07-03T09:29:48.768691Z"
                 },
                 {
                     "id": "planning_node",
                     "name": "Planning",
                     "agent": "Planning Agent",
                     "status": "PENDING",
-                    "updated_at": "2026-07-03T09:07:00.409253Z"
+                    "updated_at": "2026-07-03T09:29:48.768711Z"
                 }
             ],
             "edges": [
@@ -32,11 +133,11 @@
             "history": []
         }
     },
-    "sess-7b304d44": {
-        "id": "sess-7b304d44",
-        "project_id": "proj-843b0ce0",
+    "sess-326c4d8a": {
+        "id": "sess-326c4d8a",
+        "project_id": "proj-18b0849a",
         "git_commit_hash": null,
-        "created_at": "2026-07-03T09:07:00.526124+00:00",
+        "created_at": "2026-07-03T09:29:48.960127+00:00",
         "active_node": "init_node",
         "status": "IN_PROGRESS",
         "dag": {
@@ -45,11 +146,11 @@
             "history": []
         }
     },
-    "sess-6d4e4c87": {
-        "id": "sess-6d4e4c87",
-        "project_id": "proj-a02a4595",
+    "sess-1b6c0d3a": {
+        "id": "sess-1b6c0d3a",
+        "project_id": "proj-e1d62152",
         "git_commit_hash": null,
-        "created_at": "2026-07-03T09:07:00.774335+00:00",
+        "created_at": "2026-07-03T09:29:49.268622+00:00",
         "active_node": "init_node",
         "status": "IN_PROGRESS",
         "dag": {
@@ -58,11 +159,11 @@
             "history": []
         }
     },
-    "sess-fb785a04": {
-        "id": "sess-fb785a04",
-        "project_id": "proj-55b71bc3",
+    "sess-4710d408": {
+        "id": "sess-4710d408",
+        "project_id": "proj-ddd84870",
         "git_commit_hash": null,
-        "created_at": "2026-07-03T09:07:01.048100+00:00",
+        "created_at": "2026-07-03T09:29:49.540374+00:00",
         "active_node": "init_node",
         "status": "IN_PROGRESS",
         "dag": {
@@ -71,11 +172,11 @@
             "history": []
         }
     },
-    "sess-c9978737": {
-        "id": "sess-c9978737",
-        "project_id": "proj-c984f8b6",
+    "sess-a2ee44e4": {
+        "id": "sess-a2ee44e4",
+        "project_id": "proj-e217dfaf",
         "git_commit_hash": null,
-        "created_at": "2026-07-03T09:07:01.213401+00:00",
+        "created_at": "2026-07-03T09:29:49.692714+00:00",
         "active_node": "init_node",
         "status": "IN_PROGRESS",
         "dag": {
