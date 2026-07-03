@@ -16,24 +16,47 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
-    # Setup clean storage
-    from brain.database import engine
-    engine.dispose()
-    if os.path.exists(TEST_STORAGE_DIR):
-        try:
-            shutil.rmtree(TEST_STORAGE_DIR)
-        except PermissionError:
-            # Fallback if connection takes a moment to release
-            import time
-            time.sleep(0.5)
-            shutil.rmtree(TEST_STORAGE_DIR)
+    import brain.database
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import NullPool
+    
+    db_path = os.path.join(TEST_STORAGE_DIR, "orchestra.db").replace('\\', '/')
+    db_url = f"sqlite:///{db_path}"
+    os.environ["ORCHESTRA_DATABASE_URL"] = db_url
+
+    new_engine = create_engine(
+        db_url,
+        connect_args={"check_same_thread": False},
+        pool_pre_ping=True,
+        poolclass=NullPool
+    )
+    brain.database.engine = new_engine
+    brain.database.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=new_engine)
+    
+    new_engine.dispose()
     os.makedirs(TEST_STORAGE_DIR, exist_ok=True)
+    
+    # Recreate tables
+    from brain.database import Base
+    import brain.models.postgres_models
+    Base.metadata.drop_all(bind=new_engine)
+    Base.metadata.create_all(bind=new_engine)
+
+    # Start conductor background worker thread
+    from workers.conductor_worker import run_worker
+    import threading
+    worker_thread = threading.Thread(target=run_worker, daemon=True)
+    worker_thread.start()
     
     # Setup clean logs directory
     test_logs_dir = os.path.join(TEST_STORAGE_DIR, "logs")
     settings.LOGS_DIR = test_logs_dir
     if os.path.exists(test_logs_dir):
-        shutil.rmtree(test_logs_dir)
+        try:
+            shutil.rmtree(test_logs_dir)
+        except Exception:
+            pass
     os.makedirs(test_logs_dir, exist_ok=True)
     
     # Pre-register agents in Brain database so capability routing works
@@ -86,7 +109,10 @@ def setup_and_teardown():
     
     # Cleanup after test
     if os.path.exists(TEST_STORAGE_DIR):
-        shutil.rmtree(TEST_STORAGE_DIR)
+        try:
+            shutil.rmtree(TEST_STORAGE_DIR)
+        except Exception:
+            pass
 
 def test_health_check():
     response = client.get("/health")

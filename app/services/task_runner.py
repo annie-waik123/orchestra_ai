@@ -76,3 +76,59 @@ class LocalTaskRunner(TaskRunner):
             if not job:
                 return None
             return job["error"]
+
+
+class RedisTaskRunner(TaskRunner):
+    """
+    Distributed queue-based task runner using Redis as the broker.
+    """
+    def __init__(self):
+        pass
+
+    def submit_task(self, task_id: str, func: Callable, *args, **kwargs) -> str:
+        """
+        Creates a job, registers state in Redis, enqueues the job, and returns the ID immediately.
+        Accepts project_id and product_idea from kwargs.
+        """
+        project_id = kwargs.get("project_id")
+        product_idea = kwargs.get("product_idea")
+        session_id = task_id
+        
+        job_id = f"job-{uuid.uuid4().hex[:8]}"
+        
+        from job_queue.task_queue import TaskQueue
+        task_queue = TaskQueue()
+        task_queue.enqueue_job(
+            job_id=job_id,
+            project_id=project_id,
+            session_id=session_id,
+            product_idea=product_idea
+        )
+        return job_id
+
+    def get_task_status(self, job_id: str) -> str:
+        """
+        Fetches job status from Redis and maps it to task runner state.
+        """
+        from job_queue.job_manager import JobManager
+        job_manager = JobManager()
+        job = job_manager.get_job(job_id)
+        if not job:
+            return "unknown"
+        
+        status = job.get("status", "queued")
+        # Map success state to completed state expected by the API layer
+        if status == "success":
+            return "completed"
+        return status
+
+    def get_task_error(self, job_id: str) -> Optional[str]:
+        """
+        Fetches error message from Redis if execution failed.
+        """
+        from job_queue.job_manager import JobManager
+        job_manager = JobManager()
+        job = job_manager.get_job(job_id)
+        if not job:
+            return None
+        return job.get("error_message")

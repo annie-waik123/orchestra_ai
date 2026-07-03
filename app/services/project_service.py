@@ -112,7 +112,9 @@ class ProjectService:
         # Submit task to runner
         job_id = self.task_runner.submit_task(
             task_id=session_id,
-            func=background_job
+            func=background_job,
+            project_id=project_id,
+            product_idea=product_idea
         )
 
         return {

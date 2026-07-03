@@ -16,22 +16,28 @@ from brain.models.postgres_models import Project, Session as DB_Session, Artifac
 
 @pytest.fixture(autouse=True)
 def setup_db():
-    engine.dispose()
-    if os.path.exists(TEST_STORAGE_DIR):
-        try:
-            import shutil
-            shutil.rmtree(TEST_STORAGE_DIR)
-        except PermissionError:
-            import time
-            time.sleep(0.5)
-            import shutil
-            shutil.rmtree(TEST_STORAGE_DIR)
+    import brain.database
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import NullPool
+    
+    new_engine = create_engine(
+        os.environ["ORCHESTRA_DATABASE_URL"],
+        connect_args={"check_same_thread": False},
+        pool_pre_ping=True,
+        poolclass=NullPool
+    )
+    brain.database.engine = new_engine
+    brain.database.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=new_engine)
+    
+    new_engine.dispose()
     os.makedirs(TEST_STORAGE_DIR, exist_ok=True)
+    Base.metadata.drop_all(bind=new_engine)
     
     # Bind engine and recreate tables
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=new_engine)
     yield
-    engine.dispose()
+    new_engine.dispose()
 
 def test_project_crud():
     service = BrainService()

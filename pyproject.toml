@@ -31,7 +31,8 @@ dependencies = [
     "sqlalchemy>=2.0.0",
     "alembic>=1.11.0",
     "pyyaml>=6.0",
-    "httpx>=0.24.0"
+    "httpx>=0.24.0",
+    "redis>=5.0.0"
 ]
 
 [project.optional-dependencies]
@@ -46,7 +47,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app*", "agents*", "skills*", "mcp*"]
+include = ["app*", "agents*", "skills*", "mcp*", "job_queue*", "workers*"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

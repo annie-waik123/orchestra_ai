@@ -1,10 +1,10 @@
-from app.services.task_runner import LocalTaskRunner
+from app.services.task_runner import RedisTaskRunner
 from app.services.project_service import ProjectService
 
-# Singleton runner to maintain state in-memory across calls
-_task_runner = LocalTaskRunner()
+# Singleton runner to manage job queue pushes
+_task_runner = RedisTaskRunner()
 
-def get_task_runner() -> LocalTaskRunner:
+def get_task_runner() -> RedisTaskRunner:
     """Dependency injector providing the unified TaskRunner instance."""
     return _task_runner
 
