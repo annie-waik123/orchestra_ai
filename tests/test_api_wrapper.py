@@ -17,8 +17,16 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
     # Setup clean storage
+    from brain.database import engine
+    engine.dispose()
     if os.path.exists(TEST_STORAGE_DIR):
-        shutil.rmtree(TEST_STORAGE_DIR)
+        try:
+            shutil.rmtree(TEST_STORAGE_DIR)
+        except PermissionError:
+            # Fallback if connection takes a moment to release
+            import time
+            time.sleep(0.5)
+            shutil.rmtree(TEST_STORAGE_DIR)
     os.makedirs(TEST_STORAGE_DIR, exist_ok=True)
     
     # Setup clean logs directory

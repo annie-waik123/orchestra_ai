@@ -7,7 +7,6 @@ from app.core.config import settings
 from app.core.logging import add_project_file_handler, remove_project_file_handler
 from app.services.task_runner import TaskRunner
 from brain.services.brain_service import BrainService
-from brain.repository.json_repo import JSONSessionRepository
 
 logger = logging.getLogger("orchestra_project_service")
 
@@ -18,7 +17,6 @@ class ProjectService:
     """
     def __init__(self, task_runner: TaskRunner):
         self.brain_service = BrainService()
-        self.session_repo = JSONSessionRepository()
         self.task_runner = task_runner
         
         # Pipeline nodes in chronological order
@@ -48,7 +46,7 @@ class ProjectService:
 
     def list_sessions(self, project_id: str) -> List[Dict[str, Any]]:
         """Lists all sessions associated with the project."""
-        return self.session_repo.list_by_project(project_id)
+        return self.brain_service.list_sessions(project_id)
 
     def run_pipeline(self, project_id: str, product_idea: str) -> Dict[str, Any]:
         """Triggers Conductor pipeline execution asynchronously."""

@@ -1,10 +1,5 @@
 from typing import Dict, Any, List, Optional
-from brain.repository.json_repo import (
-    JSONDecisionRepository,
-    JSONArtifactRepository,
-    JSONSessionRepository,
-    JSONAgentRegistryRepository
-)
+from brain.services.brain_service import BrainService
 
 class ContextBuilder:
     """
@@ -12,18 +7,15 @@ class ContextBuilder:
     retrieving only decisions, artifacts, and feedback relevant to the agent's inputs.
     """
     def __init__(self):
-        self.decision_repo = JSONDecisionRepository()
-        self.artifact_repo = JSONArtifactRepository()
-        self.session_repo = JSONSessionRepository()
-        self.agent_repo = JSONAgentRegistryRepository()
+        self.brain_service = BrainService()
 
     def build_context_for_agent(self, session_id: str, agent_name: str) -> str:
         # 1. Fetch agent configuration to determine target inputs
-        agent = self.agent_repo.get(agent_name)
+        agent = self.brain_service.get_registered_agent(agent_name)
         inputs = agent.get("inputs", []) if agent else []
         
         # 2. Fetch session details to check current state & human feedback
-        session = self.session_repo.get(session_id)
+        session = self.brain_service.get_session(session_id)
         active_node = session.get("active_node") if session else "unknown"
         feedback = []
         if session and "dag" in session and "history" in session["dag"]:
@@ -34,9 +26,9 @@ class ContextBuilder:
             ]
 
         # 3. Retrieve decisions and filter by input boundaries
-        decisions = self.decision_repo.list_by_session(session_id)
+        decisions = self.brain_service.list_session_decisions(session_id)
         # 4. Retrieve artifacts
-        artifacts = self.artifact_repo.list_by_session(session_id)
+        artifacts = self.brain_service.list_session_artifacts(session_id)
 
         # 5. Build the context output string
         lines = []

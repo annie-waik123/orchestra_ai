@@ -18,13 +18,26 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
     # Ensure a clean slate for storage
+    from brain.database import engine
+    engine.dispose()
     if os.path.exists(TEST_STORAGE_DIR):
-        shutil.rmtree(TEST_STORAGE_DIR)
+        try:
+            shutil.rmtree(TEST_STORAGE_DIR)
+        except PermissionError:
+            import time
+            time.sleep(0.5)
+            shutil.rmtree(TEST_STORAGE_DIR)
     os.makedirs(TEST_STORAGE_DIR, exist_ok=True)
     yield
     # Cleanup after tests
+    engine.dispose()
     if os.path.exists(TEST_STORAGE_DIR):
-        shutil.rmtree(TEST_STORAGE_DIR)
+        try:
+            shutil.rmtree(TEST_STORAGE_DIR)
+        except PermissionError:
+            import time
+            time.sleep(0.5)
+            shutil.rmtree(TEST_STORAGE_DIR)
 
 def test_health_check():
     response = client.get("/health")

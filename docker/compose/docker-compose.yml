@@ -1,6 +1,24 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: orchestra
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d orchestra"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - orchestra-net
+
   brain:
     build:
       context: ../..
@@ -14,6 +32,10 @@ services:
     environment:
       - ORCHESTRA_STORAGE_DIR=/workspace/brain/storage
       - ORCHESTRA_LOGS_DIR=/workspace/logs
+      - ORCHESTRA_DATABASE_URL=postgresql://postgres:postgres@db:5432/orchestra
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - orchestra-net
 
@@ -32,14 +54,19 @@ services:
       - ORCHESTRA_STORAGE_DIR=/workspace/brain/storage
       - ORCHESTRA_LOGS_DIR=/workspace/logs
       - ORCHESTRA_DOCKER_SANDBOX=true
+      - ORCHESTRA_DATABASE_URL=postgresql://postgres:postgres@db:5432/orchestra
     depends_on:
-      - brain
+      db:
+        condition: service_healthy
+      brain:
+        condition: service_started
     networks:
       - orchestra-net
 
 volumes:
   brain-storage:
   logs-dir:
+  pgdata:
 
 networks:
   orchestra-net:
