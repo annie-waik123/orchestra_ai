@@ -280,6 +280,10 @@ def test_conductor_learning_integration():
 
     factory.register_agent_class("learning_agent", LearningAgent)
     brain.registered_manifests["learning_agent"] = factory._create_stub_manifest_dict("learning_agent", ["learning_agent"])
+
+    from agents.predictive import PredictiveAgent
+    factory.register_agent_class("predictive_agent", PredictiveAgent)
+    brain.registered_manifests["predictive_agent"] = factory._create_stub_manifest_dict("predictive_agent", ["prediction_report"])
     
     conductor = Conductor(brain_client=brain, agent_factory=factory)
     
@@ -292,8 +296,8 @@ def test_conductor_learning_integration():
     assert response["status"] == "success"
     assert response["session_id"] == "sess_integrate_123"
     
-    # 7 artifacts: Planning, Blueprint, Implementation, Validation, Evaluation, Repair, Learning
-    assert len(response["artifacts"]) == 7
+    # 8 artifacts: Planning, Blueprint, Implementation, Predictive, Validation, Evaluation, Repair, Learning
+    assert len(response["artifacts"]) == 8
     
     learning_artifact = next(a for a in response["artifacts"] if a["type"] == "learning_report")
     assert learning_artifact["generated_by"] == "learning_agent"

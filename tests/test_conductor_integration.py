@@ -85,6 +85,12 @@ class ConductorMockResolver(MockMcpResolver):
                         '{"repair_status": "no_action", "issues_detected": [], "fixes_applied": [], "retry_required": false}'
                     )
                 }
+            if path == "docs/08_prediction_report.json":
+                return {
+                    "content": (
+                        '{"risk_score": 0.0, "confidence": 1.0, "high_risk_components": [], "warnings": [], "failure_predictions": [], "preventive_recommendations": []}'
+                    )
+                }
             return {"content": "mock file content"}
         elif tool_name == "execute_command":
             return {
@@ -129,6 +135,11 @@ def test_conductor_e2e_flow():
     factory.register_agent_class("learning_agent", LearningAgent)
     learning_manifest = factory._create_stub_manifest_dict("learning_agent", ["learning_agent"])
     brain.registered_manifests["learning_agent"] = learning_manifest
+
+    from agents.predictive import PredictiveAgent
+    factory.register_agent_class("predictive_agent", PredictiveAgent)
+    predictive_manifest = factory._create_stub_manifest_dict("predictive_agent", ["prediction_report"])
+    brain.registered_manifests["predictive_agent"] = predictive_manifest
     
     # 3. Instantiate Conductor
     conductor = Conductor(brain_client=brain, agent_factory=factory)
@@ -146,8 +157,8 @@ def test_conductor_e2e_flow():
     assert response["session_id"] == "sess_test_123"
     assert response["project_id"] == "proj_test_123"
     
-    # 6. Verify that the Conductor returns Planning, Blueprint, Implementation, Validation, Evaluation, Repair, and Learning artifacts
-    assert len(response["artifacts"]) == 7
+    # 8 artifacts: Planning, Blueprint, Implementation, Predictive, Validation, Evaluation, Repair, Learning
+    assert len(response["artifacts"]) == 8
     
     prd_artifact = next(a for a in response["artifacts"] if a["type"] == "prd")
     assert prd_artifact["generated_by"] == "Planning Agent"
@@ -170,8 +181,11 @@ def test_conductor_e2e_flow():
     assert evaluation_artifact["file_path"] == "docs/05_evaluation_report.md"
  
     repair_artifact = next(a for a in response["artifacts"] if a["type"] == "repair_decision")
-    assert repair_artifact["generated_by"] == "repair_agent"
     assert repair_artifact["file_path"] == "docs/06_repair_decision.json"
+
+    predictive_artifact = next(a for a in response["artifacts"] if a["type"] == "prediction_report")
+    assert predictive_artifact["generated_by"] == "predictive_agent"
+    assert predictive_artifact["file_path"] == "docs/08_prediction_report.json"
 
     learning_artifact = next(a for a in response["artifacts"] if a["type"] == "learning_report")
     assert learning_artifact["generated_by"] == "learning_agent"
