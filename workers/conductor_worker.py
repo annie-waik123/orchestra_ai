@@ -35,9 +35,11 @@ def run_worker():
             logger.info(f"Acquired job {job_id} for session {session_id} and user {user_id}. Starting execution...")
             job_manager.update_job_status(job_id, "running")
 
-            from brain.database import current_user_id
+            from brain.database import current_user_id, current_session_id
             token = current_user_id.set(user_id or "")
+            sess_token = current_session_id.set(session_id or "")
 
+            start_time = time.time()
             try:
                 # Update session status to IN_PROGRESS in postgres database
                 brain_service.update_session(session_id, {"status": "IN_PROGRESS"}, user_id=user_id)
@@ -83,8 +85,45 @@ def run_worker():
                     brain_service.update_session(session_id, {"status": "FAILED"}, user_id=user_id)
                 finally:
                     remove_project_file_handler(fh)
+
+                    # Compute execution durations and finalize cost
+                    compute_ms = int((time.time() - start_time) * 1000)
+                    sandbox_ms = 0
+                    try:
+                        from job_queue.redis_client import RedisClient
+                        r_client = RedisClient().client
+                        key = f"sandbox_time:{session_id}"
+                        val = r_client.get(key)
+                        if val:
+                            sandbox_ms = int(val)
+                            r_client.delete(key)
+                    except Exception:
+                        pass
+
+                    api_calls = 0
+                    try:
+                        audit_logs = brain_service.list_audit_trail(session_id, user_id=user_id)
+                        api_calls = len(audit_logs)
+                    except Exception:
+                        pass
+
+                    try:
+                        db = brain_service._get_db_session()
+                        from billing.billing_service import BillingService
+                        billing = BillingService(db)
+                        billing.finalize_job_cost(
+                            job_id=job_id,
+                            user_id=user_id or "",
+                            compute_ms=compute_ms,
+                            sandbox_ms=sandbox_ms,
+                            api_calls=api_calls
+                        )
+                        db.close()
+                    except Exception as e:
+                        logger.error(f"Failed to finalize cost for job {job_id}: {e}")
             finally:
                 current_user_id.reset(token)
+                current_session_id.reset(sess_token)
 
         except Exception as loop_error:
             logger.error(f"Fatal worker exception in polling loop: {loop_error}")

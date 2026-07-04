@@ -113,13 +113,30 @@ class ToolManager:
         """Runs isolated execution shell via Sandbox MCP or Docker sandbox."""
         self._check_allowed("execute_in_sandbox")
         
+        import time
+        start_time = time.time()
+        success = False
+        duration_ms = 0
+
         if self.sandbox_manager.is_enabled():
-            import time
-            start_time = time.time()
-            success = False
             try:
                 result = self.sandbox_manager.execute(command, files)
                 success = result.get("status") == "success"
+                duration_ms = result.get("duration_ms", 0)
+                
+                # Accumulate sandbox time in Redis
+                from brain.database import current_session_id
+                session_id = current_session_id.get()
+                if session_id and duration_ms > 0:
+                    try:
+                        from job_queue.redis_client import RedisClient
+                        r_client = RedisClient().client
+                        key = f"sandbox_time:{session_id}"
+                        curr = r_client.get(key)
+                        r_client.set(key, str((int(curr) if curr else 0) + duration_ms))
+                    except Exception:
+                        pass
+                
                 return result
             except Exception as e:
                 # Lazy import ToolError to avoid circular import issues
@@ -135,6 +152,21 @@ class ToolManager:
                 self.metrics.record_tool_call("execute_in_sandbox", latency, success)
 
         res = self._execute_tool_call("execute_in_sandbox", "sandbox", "execute_command", {"command": command, "files": files})
+        duration_ms = int((time.time() - start_time) * 1000.0)
+        
+        # Accumulate sandbox fallback time in Redis
+        from brain.database import current_session_id
+        session_id = current_session_id.get()
+        if session_id:
+            try:
+                from job_queue.redis_client import RedisClient
+                r_client = RedisClient().client
+                key = f"sandbox_time:{session_id}"
+                curr = r_client.get(key)
+                r_client.set(key, str((int(curr) if curr else 0) + duration_ms))
+            except Exception:
+                pass
+
         if isinstance(res, dict):
             return res
         return {"stdout": str(res), "stderr": "", "exit_code": 0}

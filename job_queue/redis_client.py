@@ -13,6 +13,8 @@ class MockRedis:
     """
     _lists: Dict[str, list] = {}
     _hashes: Dict[str, Dict[str, str]] = {}
+    _kv: Dict[str, str] = {}
+    _ttls: Dict[str, float] = {}
     _lock = threading.Lock()
 
     def __init__(self, *args, **kwargs):
@@ -80,7 +82,62 @@ class MockRedis:
                 if name in self._hashes:
                     del self._hashes[name]
                     count += 1
+                if name in self._kv:
+                    del self._kv[name]
+                    count += 1
+                if name in self._ttls:
+                    del self._ttls[name]
             return count
+
+    def _check_ttl(self, name: str):
+        if name in self._ttls:
+            if time.time() > self._ttls[name]:
+                if name in self._kv:
+                    del self._kv[name]
+                del self._ttls[name]
+
+    def get(self, name: str) -> Optional[str]:
+        with self._lock:
+            self._check_ttl(name)
+            return self._kv.get(name)
+
+    def set(self, name: str, value: str, ex: Optional[int] = None) -> bool:
+        with self._lock:
+            self._kv[name] = str(value)
+            if ex is not None:
+                self._ttls[name] = time.time() + ex
+            elif name in self._ttls:
+                del self._ttls[name]
+            return True
+
+    def incr(self, name: str) -> int:
+        with self._lock:
+            self._check_ttl(name)
+            val = self._kv.get(name, "0")
+            try:
+                new_val = int(val) + 1
+            except ValueError:
+                new_val = 1
+            self._kv[name] = str(new_val)
+            return new_val
+
+    def expire(self, name: str, seconds: int) -> bool:
+        with self._lock:
+            self._check_ttl(name)
+            if name in self._kv:
+                self._ttls[name] = time.time() + seconds
+                return True
+            return False
+
+    def ttl(self, name: str) -> int:
+        with self._lock:
+            self._check_ttl(name)
+            if name in self._kv:
+                if name in self._ttls:
+                    rem = int(self._ttls[name] - time.time())
+                    return rem if rem > 0 else -1
+                return -1
+            return -2
 
 
 class RedisClient:

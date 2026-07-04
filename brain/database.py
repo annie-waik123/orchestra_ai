@@ -43,3 +43,4 @@ def get_db():
 
 from contextvars import ContextVar
 current_user_id: ContextVar[str] = ContextVar("current_user_id", default="")
+current_session_id: ContextVar[str] = ContextVar("current_session_id", default="")

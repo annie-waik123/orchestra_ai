@@ -95,7 +95,7 @@ class RedisTaskRunner(TaskRunner):
         user_id = kwargs.get("user_id")
         session_id = task_id
         
-        job_id = f"job-{uuid.uuid4().hex[:8]}"
+        job_id = kwargs.get("job_id") or f"job-{uuid.uuid4().hex[:8]}"
         
         from job_queue.task_queue import TaskQueue
         task_queue = TaskQueue()

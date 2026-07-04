@@ -16,6 +16,7 @@ from app.schemas.project import (
 from app.services.project_service import ProjectService
 from app.dependencies import get_project_service
 from app.dependencies.auth import get_current_user, get_db
+from app.dependencies.rate_limiter import check_rate_limits
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -57,27 +58,43 @@ def create_project(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to create project: {e}")
 
-@router.post("/{project_id}/run", response_model=RunProjectResponse, responses={404: {"model": ErrorResponse}, 400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+@router.post("/{project_id}/run", response_model=RunProjectResponse, dependencies=[Depends(check_rate_limits)], responses={404: {"model": ErrorResponse}, 400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 429: {"model": ErrorResponse}, 402: {"model": ErrorResponse}})
 def run_project_pipeline(
     project_id: str,
     run_in: RunProjectRequest,
     service: ProjectService = Depends(get_project_service),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Submits a new async execution run for the project requirements."""
     verify_project_scope(project_id, current_user)
     project = service.get_project(project_id, user_id=current_user["id"])
     if not project:
         raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
-        
+
+    user_id = current_user["id"]
+    from billing.billing_service import BillingService
+    billing = BillingService(db)
+
+    # Validate tier quotas
+    is_quota_ok, quota_reason = billing.quota_manager.verify_quota(user_id)
+    if not is_quota_ok:
+        raise HTTPException(status_code=402, detail=quota_reason)
+
+    # Validate queue flooding (max 3 concurrent jobs)
+    is_queue_ok, queue_reason = billing.quota_manager.verify_queue_flooding(user_id)
+    if not is_queue_ok:
+        raise HTTPException(status_code=429, detail=queue_reason)
+
     try:
         return service.run_pipeline(
             project_id=project_id,
             product_idea=run_in.product_idea,
-            user_id=current_user["id"]
+            user_id=user_id,
+            db=db
         )
     except ValueError as val_err:
-        raise HTTPException(status_code=404, detail=str(val_err))
+        raise HTTPException(status_code=400, detail=str(val_err))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to trigger execution pipeline: {e}")
 

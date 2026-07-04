@@ -48,7 +48,7 @@ class ProjectService:
         """Lists all sessions associated with the project."""
         return self.brain_service.list_sessions(project_id, user_id)
 
-    def run_pipeline(self, project_id: str, product_idea: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+    def run_pipeline(self, project_id: str, product_idea: str, user_id: Optional[str] = None, db: Optional[Any] = None) -> Dict[str, Any]:
         """Triggers Conductor pipeline execution asynchronously."""
         project = self.brain_service.get_project(project_id, user_id)
         if not project:
@@ -78,6 +78,27 @@ class ProjectService:
             ],
             "history": []
         }
+
+        # Estimate cost and save JobCost record before queue push
+        db_session = db
+        is_temp_db = False
+        if not db_session:
+            db_session = self.brain_service._get_db_session()
+            is_temp_db = True
+
+        try:
+            from billing.billing_service import BillingService
+            billing = BillingService(db_session)
+            est_cost = billing.check_pre_run_rules(user_id or "", pipeline)[2]
+            
+            # Generate job_id beforehand
+            job_id = f"job-{uuid.uuid4().hex[:8]}"
+            
+            # Create pre-run cost log
+            billing.create_initial_cost_record(job_id=job_id, user_id=user_id or "", estimated_cost=est_cost)
+        finally:
+            if is_temp_db:
+                db_session.close()
 
         # Create session in DB first so status checks can find it instantly
         session = self.brain_service.create_session(project_id=project_id, dag=pipeline, user_id=user_id)
@@ -109,13 +130,14 @@ class ProjectService:
             finally:
                 remove_project_file_handler(fh)
 
-        # Submit task to runner, including user_id context
-        job_id = self.task_runner.submit_task(
+        # Submit task to runner, including user_id context and the pre-generated job_id
+        self.task_runner.submit_task(
             task_id=session_id,
             func=background_job,
             project_id=project_id,
             product_idea=product_idea,
-            user_id=user_id
+            user_id=user_id,
+            job_id=job_id
         )
 
         return {
