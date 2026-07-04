@@ -42,11 +42,24 @@ def setup_db_and_redis():
     Base.metadata.drop_all(bind=new_engine)
     Base.metadata.create_all(bind=new_engine)
     
+    # Seed test user
+    from brain.models.postgres_models import User
+    db = sessionmaker(bind=new_engine)()
+    test_user = User(id="test-user-uuid", email="test@example.com", password_hash="dummy")
+    db.add(test_user)
+    db.commit()
+    db.close()
+
+    # Set ContextVar
+    from brain.database import current_user_id
+    token = current_user_id.set("test-user-uuid")
+    
     # Clear MockRedis states
     MockRedis._lists.clear()
     MockRedis._hashes.clear()
     
     yield
+    current_user_id.reset(token)
     
     # Teardown test DB and Redis
     new_engine.dispose()

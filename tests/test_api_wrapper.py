@@ -40,8 +40,20 @@ def setup_and_teardown():
     # Recreate tables
     from brain.database import Base
     import brain.models.postgres_models
+    from brain.models.postgres_models import User
     Base.metadata.drop_all(bind=new_engine)
     Base.metadata.create_all(bind=new_engine)
+
+    # Seed test user
+    db = sessionmaker(bind=new_engine)()
+    test_user = User(id="test-user-uuid", email="test@example.com", password_hash="dummy")
+    db.add(test_user)
+    db.commit()
+    db.close()
+
+    # Override get_current_user dependency
+    from app.dependencies.auth import get_current_user
+    app.dependency_overrides[get_current_user] = lambda: {"id": "test-user-uuid", "email": "test@example.com"}
 
     # Start conductor background worker thread
     from workers.conductor_worker import run_worker

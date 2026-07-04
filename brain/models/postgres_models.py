@@ -7,10 +7,21 @@ from brain.database import Base
 def get_utc_now():
     return datetime.now(timezone.utc)
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, default=get_utc_now)
+
+
 class Project(Base):
     __tablename__ = "projects"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    api_key_hash = Column(String, nullable=True)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     status = Column(String, default="active")
@@ -26,6 +37,7 @@ class Session(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     status = Column(String, default="IN_PROGRESS")
     active_node = Column(String, nullable=True)
     progress_percentage = Column(Float, default=0.0)
@@ -50,6 +62,7 @@ class Artifact(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     artifact_type = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     version = Column(Integer, default=1)

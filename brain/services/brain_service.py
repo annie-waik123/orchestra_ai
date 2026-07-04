@@ -66,13 +66,14 @@ class BrainService:
         return SessionLocal()
 
     # --- Project Actions ---
-    def create_project(self, name: str, description: Optional[str] = None) -> Dict[str, Any]:
+    def create_project(self, name: str, description: Optional[str] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLProjectRepository(db)
                 project = {
                     "id": f"proj-{uuid.uuid4().hex[:8]}",
+                    "user_id": user_id,
                     "name": name,
                     "description": description,
                     "status": "active"
@@ -90,30 +91,30 @@ class BrainService:
             }
             return self.project_repo.create(project)
 
-    def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
+    def get_project(self, project_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLProjectRepository(db)
-                return repo.get(project_id)
+                return repo.get(project_id, user_id)
             finally:
                 db.close()
         else:
             return self.project_repo.get(project_id)
 
-    def list_projects(self) -> List[Dict[str, Any]]:
+    def list_projects(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLProjectRepository(db)
-                return repo.list_all()
+                return repo.list_all(user_id)
             finally:
                 db.close()
         else:
             return self.project_repo.list_all()
 
     # --- Session Actions ---
-    def create_session(self, project_id: str, git_commit_hash: Optional[str] = None, dag: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def create_session(self, project_id: str, git_commit_hash: Optional[str] = None, dag: Optional[Dict[str, Any]] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
         session_id = f"sess-{uuid.uuid4().hex[:8]}"
         
         if self.use_sql:
@@ -123,6 +124,7 @@ class BrainService:
                 session = {
                     "id": session_id,
                     "project_id": project_id,
+                    "user_id": user_id,
                     "git_commit_hash": git_commit_hash,
                     "status": "IN_PROGRESS",
                     "active_node": "init_node",
@@ -130,7 +132,7 @@ class BrainService:
                     "dag": dag or {"nodes": [], "edges": [], "history": []}
                 }
                 stored = repo.create(session)
-                self.log_audit(session_id, "System", "CREATE_SESSION", {"git_commit": git_commit_hash})
+                self.log_audit(session_id, "System", "CREATE_SESSION", {"git_commit": git_commit_hash}, user_id=user_id)
                 return stored
             finally:
                 db.close()
@@ -148,50 +150,50 @@ class BrainService:
             self.log_audit(session_id, "System", "CREATE_SESSION", {"git_commit": git_commit_hash})
             return session
 
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLSessionRepository(db)
-                return repo.get(session_id)
+                return repo.get(session_id, user_id)
             finally:
                 db.close()
         else:
             return self.session_repo.get(session_id)
 
-    def list_sessions(self, project_id: str) -> List[Dict[str, Any]]:
+    def list_sessions(self, project_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLSessionRepository(db)
-                return repo.list_by_project(project_id)
+                return repo.list_by_project(project_id, user_id)
             finally:
                 db.close()
         else:
             return self.session_repo.list_by_project(project_id)
 
-    def update_session(self, session_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_session(self, session_id: str, updates: Dict[str, Any], user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLSessionRepository(db)
-                session = repo.get(session_id)
+                session = repo.get(session_id, user_id)
                 if not session:
                     return None
 
-                updated_session = repo.update(session_id, updates)
+                updated_session = repo.update(session_id, updates, user_id)
                 
                 # Log state transitions
                 if "active_node" in updates:
                     self.log_audit(session_id, "Conductor", "NODE_TRANSITION", {
                         "from_node": session.get("active_node"),
                         "to_node": updates["active_node"]
-                    })
+                    }, user_id=user_id)
                 if "status" in updates:
                     self.log_audit(session_id, "Conductor", "STATUS_CHANGE", {
                         "from_status": session.get("status"),
                         "to_status": updates["status"]
-                    })
+                    }, user_id=user_id)
                 return updated_session
             finally:
                 db.close()
@@ -216,7 +218,7 @@ class BrainService:
             return updated_session
 
     # --- Artifact Actions ---
-    def store_artifact(self, artifact_data: Dict[str, Any]) -> Dict[str, Any]:
+    def store_artifact(self, artifact_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
         session_id = artifact_data["session_id"]
         file_path = artifact_data["file_path"]
         
@@ -224,7 +226,7 @@ class BrainService:
             db = self._get_db_session()
             try:
                 repo = SQLArtifactRepository(db)
-                latest = repo.get_by_path(session_id, file_path)
+                latest = repo.get_by_path(session_id, file_path, user_id)
                 version = 1
                 if latest:
                     version = latest.get("version", 1) + 1
@@ -232,6 +234,7 @@ class BrainService:
                 artifact = {
                     **artifact_data,
                     "id": f"art-{uuid.uuid4().hex[:8]}",
+                    "user_id": user_id,
                     "version": version
                 }
                 stored = repo.create(artifact)
@@ -239,7 +242,7 @@ class BrainService:
                     "file_path": file_path,
                     "version": version,
                     "artifact_id": stored["id"]
-                })
+                }, user_id=user_id)
                 return stored
             finally:
                 db.close()
@@ -263,55 +266,59 @@ class BrainService:
             })
             return stored
 
-    def get_artifact(self, artifact_id: str) -> Optional[Dict[str, Any]]:
+    def get_artifact(self, artifact_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLArtifactRepository(db)
-                return repo.get(artifact_id)
+                return repo.get(artifact_id, user_id)
             finally:
                 db.close()
         else:
             return self.artifact_repo.get(artifact_id)
 
-    def get_latest_artifact_by_path(self, session_id: str, file_path: str) -> Optional[Dict[str, Any]]:
+    def get_latest_artifact_by_path(self, session_id: str, file_path: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLArtifactRepository(db)
-                return repo.get_by_path(session_id, file_path)
+                return repo.get_by_path(session_id, file_path, user_id)
             finally:
                 db.close()
         else:
             return self.artifact_repo.get_by_path(session_id, file_path)
 
-    def list_session_artifacts(self, session_id: str) -> List[Dict[str, Any]]:
+    def list_session_artifacts(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLArtifactRepository(db)
-                return repo.list_by_session(session_id)
+                return repo.list_by_session(session_id, user_id)
             finally:
                 db.close()
         else:
             return self.artifact_repo.list_by_session(session_id)
 
-    def get_artifact_versions(self, session_id: str, file_path: str) -> List[Dict[str, Any]]:
+    def get_artifact_versions(self, session_id: str, file_path: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLArtifactRepository(db)
-                return repo.get_versions(session_id, file_path)
+                return repo.get_versions(session_id, file_path, user_id)
             finally:
                 db.close()
         else:
             return self.artifact_repo.get_versions(session_id, file_path)
 
     # --- Decision Actions ---
-    def store_decision(self, decision_data: Dict[str, Any]) -> Dict[str, Any]:
+    def store_decision(self, decision_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
         if self.use_sql:
             db = self._get_db_session()
             try:
+                # Validate session owner
+                sess = SQLSessionRepository(db).get(decision_data["session_id"], user_id)
+                if not sess:
+                    raise ValueError("Tenant isolation violation: invalid session context.")
                 repo = SQLDecisionRepository(db)
                 decision = {
                     **decision_data,
@@ -322,7 +329,7 @@ class BrainService:
                     "title": decision_data["title"],
                     "node": decision_data["node"],
                     "decision_id": stored["id"]
-                })
+                }, user_id=user_id)
                 return stored
             finally:
                 db.close()
@@ -340,22 +347,26 @@ class BrainService:
             })
             return stored
 
-    def list_session_decisions(self, session_id: str) -> List[Dict[str, Any]]:
+    def list_session_decisions(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLDecisionRepository(db)
-                return repo.list_by_session(session_id)
+                return repo.list_by_session(session_id, user_id)
             finally:
                 db.close()
         else:
             return self.decision_repo.list_by_session(session_id)
 
     # --- Evaluation Actions ---
-    def store_evaluation(self, evaluation_data: Dict[str, Any]) -> Dict[str, Any]:
+    def store_evaluation(self, evaluation_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
         if self.use_sql:
             db = self._get_db_session()
             try:
+                # Validate session owner
+                sess = SQLSessionRepository(db).get(evaluation_data["session_id"], user_id)
+                if not sess:
+                    raise ValueError("Tenant isolation violation: invalid session context.")
                 repo = SQLEvaluationRepository(db)
                 eval_obj = {
                     **evaluation_data,
@@ -365,7 +376,7 @@ class BrainService:
                 self.log_audit(evaluation_data["session_id"], "Evaluator", "QUALITY_GATE_EVALUATION", {
                     "score": evaluation_data["composite_score"],
                     "passed": evaluation_data["passed"]
-                })
+                }, user_id=user_id)
                 return stored
             finally:
                 db.close()
@@ -381,12 +392,12 @@ class BrainService:
             })
             return stored
 
-    def get_session_evaluation(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session_evaluation(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLEvaluationRepository(db)
-                return repo.get_by_session(session_id)
+                return repo.get_by_session(session_id, user_id)
             finally:
                 db.close()
         else:
@@ -435,10 +446,14 @@ class BrainService:
             return self.agent_repo.list_all()
 
     # --- Audit Logger ---
-    def log_audit(self, session_id: str, agent: str, action: str, details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def log_audit(self, session_id: str, agent: str, action: str, details: Optional[Dict[str, Any]] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
         if self.use_sql:
             db = self._get_db_session()
             try:
+                # Validate session owner
+                sess = SQLSessionRepository(db).get(session_id, user_id)
+                if not sess:
+                    raise ValueError("Tenant isolation violation: invalid session context.")
                 repo = SQLAuditRepository(db)
                 audit_record = {
                     "id": f"aud-{uuid.uuid4().hex[:8]}",
@@ -461,22 +476,26 @@ class BrainService:
             }
             return self.audit_repo.create(audit_record)
 
-    def list_audit_trail(self, session_id: str) -> List[Dict[str, Any]]:
+    def list_audit_trail(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLAuditRepository(db)
-                return repo.list_by_session(session_id)
+                return repo.list_by_session(session_id, user_id)
             finally:
                 db.close()
         else:
             return self.audit_repo.list_by_session(session_id)
 
     # --- Predictions ---
-    def store_prediction(self, prediction_data: Dict[str, Any]) -> Dict[str, Any]:
+    def store_prediction(self, prediction_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
         if self.use_sql:
             db = self._get_db_session()
             try:
+                # Validate session owner
+                sess = SQLSessionRepository(db).get(prediction_data["session_id"], user_id)
+                if not sess:
+                    raise ValueError("Tenant isolation violation: invalid session context.")
                 repo = SQLPredictionRepository(db)
                 prediction = {
                     **prediction_data,
@@ -489,22 +508,26 @@ class BrainService:
             # Fallback mock for JSON Repo compatibility
             return prediction_data
 
-    def list_predictions(self, session_id: str) -> List[Dict[str, Any]]:
+    def list_predictions(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLPredictionRepository(db)
-                return repo.list_by_session(session_id)
+                return repo.list_by_session(session_id, user_id)
             finally:
                 db.close()
         else:
             return []
 
     # --- Optimizations ---
-    def store_optimization(self, optimization_data: Dict[str, Any]) -> Dict[str, Any]:
+    def store_optimization(self, optimization_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
         if self.use_sql:
             db = self._get_db_session()
             try:
+                # Validate session owner
+                sess = SQLSessionRepository(db).get(optimization_data["session_id"], user_id)
+                if not sess:
+                    raise ValueError("Tenant isolation violation: invalid session context.")
                 repo = SQLOptimizationRepository(db)
                 optimization = {
                     **optimization_data,
@@ -517,22 +540,26 @@ class BrainService:
             # Fallback mock for JSON Repo compatibility
             return optimization_data
 
-    def list_optimizations(self, session_id: str) -> List[Dict[str, Any]]:
+    def list_optimizations(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLOptimizationRepository(db)
-                return repo.list_by_session(session_id)
+                return repo.list_by_session(session_id, user_id)
             finally:
                 db.close()
         else:
             return []
 
     # --- Learning Reports ---
-    def store_learning_report(self, learning_data: Dict[str, Any]) -> Dict[str, Any]:
+    def store_learning_report(self, learning_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
         if self.use_sql:
             db = self._get_db_session()
             try:
+                # Validate session owner
+                sess = SQLSessionRepository(db).get(learning_data["session_id"], user_id)
+                if not sess:
+                    raise ValueError("Tenant isolation violation: invalid session context.")
                 repo = SQLLearningRepository(db)
                 report = {
                     **learning_data,
@@ -545,12 +572,12 @@ class BrainService:
             # Fallback mock for JSON Repo compatibility
             return learning_data
 
-    def list_learning_reports(self, session_id: str) -> List[Dict[str, Any]]:
+    def list_learning_reports(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.use_sql:
             db = self._get_db_session()
             try:
                 repo = SQLLearningRepository(db)
-                return repo.list_by_session(session_id)
+                return repo.list_by_session(session_id, user_id)
             finally:
                 db.close()
         else:

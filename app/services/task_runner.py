@@ -88,10 +88,11 @@ class RedisTaskRunner(TaskRunner):
     def submit_task(self, task_id: str, func: Callable, *args, **kwargs) -> str:
         """
         Creates a job, registers state in Redis, enqueues the job, and returns the ID immediately.
-        Accepts project_id and product_idea from kwargs.
+        Accepts project_id, product_idea, and user_id from kwargs.
         """
         project_id = kwargs.get("project_id")
         product_idea = kwargs.get("product_idea")
+        user_id = kwargs.get("user_id")
         session_id = task_id
         
         job_id = f"job-{uuid.uuid4().hex[:8]}"
@@ -102,7 +103,8 @@ class RedisTaskRunner(TaskRunner):
             job_id=job_id,
             project_id=project_id,
             session_id=session_id,
-            product_idea=product_idea
+            product_idea=product_idea,
+            user_id=user_id
         )
         return job_id
 

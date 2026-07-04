@@ -22,6 +22,16 @@ from brain.models.postgres_models import (
     Decision,
     AgentRegistry
 )
+from brain.database import current_user_id
+
+def resolve_user_id(user_id: Optional[str]) -> str:
+    uid = user_id or current_user_id.get()
+    if not uid:
+        import os
+        if os.environ.get("ORCHESTRA_TEST_MODE") == "true":
+            return "test-user-uuid"
+        raise ValueError("Tenant isolation violation: user_id context not established.")
+    return uid
 
 def model_to_dict(model_obj) -> Optional[Dict[str, Any]]:
     """Helper converting SQLAlchemy models to plain dictionaries with ISO datetime formatting."""
@@ -57,8 +67,11 @@ class SQLProjectRepository(ProjectRepository):
         self.db = db
 
     def create(self, project_data: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = resolve_user_id(project_data.get("user_id"))
         project = Project(
             id=project_data.get("id"),
+            user_id=user_id,
+            api_key_hash=project_data.get("api_key_hash"),
             name=project_data["name"],
             description=project_data.get("description"),
             status=project_data.get("status", "active")
@@ -68,12 +81,14 @@ class SQLProjectRepository(ProjectRepository):
         self.db.refresh(project)
         return model_to_dict(project)
 
-    def get(self, project_id: str) -> Optional[Dict[str, Any]]:
-        project = self.db.query(Project).filter(Project.id == project_id).first()
+    def get(self, project_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        project = self.db.query(Project).filter(Project.id == project_id, Project.user_id == uid).first()
         return model_to_dict(project)
 
-    def list_all(self) -> List[Dict[str, Any]]:
-        projects = self.db.query(Project).all()
+    def list_all(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        projects = self.db.query(Project).filter(Project.user_id == uid).all()
         return [model_to_dict(p) for p in projects]
 
 
@@ -82,9 +97,11 @@ class SQLSessionRepository(SessionRepository):
         self.db = db
 
     def create(self, session_data: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = resolve_user_id(session_data.get("user_id"))
         session = DB_Session(
             id=session_data.get("id"),
             project_id=session_data["project_id"],
+            user_id=user_id,
             status=session_data.get("status", "IN_PROGRESS"),
             active_node=session_data.get("active_node"),
             progress_percentage=session_data.get("progress_percentage", 0.0),
@@ -96,12 +113,14 @@ class SQLSessionRepository(SessionRepository):
         self.db.refresh(session)
         return model_to_dict(session)
 
-    def get(self, session_id: str) -> Optional[Dict[str, Any]]:
-        session = self.db.query(DB_Session).filter(DB_Session.id == session_id).first()
+    def get(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        session = self.db.query(DB_Session).filter(DB_Session.id == session_id, DB_Session.user_id == uid).first()
         return model_to_dict(session)
 
-    def update(self, session_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        session = self.db.query(DB_Session).filter(DB_Session.id == session_id).first()
+    def update(self, session_id: str, updates: Dict[str, Any], user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        session = self.db.query(DB_Session).filter(DB_Session.id == session_id, DB_Session.user_id == uid).first()
         if not session:
             return None
         
@@ -113,8 +132,9 @@ class SQLSessionRepository(SessionRepository):
         self.db.refresh(session)
         return model_to_dict(session)
 
-    def list_by_project(self, project_id: str) -> List[Dict[str, Any]]:
-        sessions = self.db.query(DB_Session).filter(DB_Session.project_id == project_id).all()
+    def list_by_project(self, project_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        sessions = self.db.query(DB_Session).filter(DB_Session.project_id == project_id, DB_Session.user_id == uid).all()
         return [model_to_dict(s) for s in sessions]
 
 
@@ -123,9 +143,11 @@ class SQLArtifactRepository(ArtifactRepository):
         self.db = db
 
     def create(self, artifact_data: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = resolve_user_id(artifact_data.get("user_id"))
         artifact = Artifact(
             id=artifact_data.get("id"),
             session_id=artifact_data["session_id"],
+            user_id=user_id,
             artifact_type=artifact_data.get("artifact_type") or artifact_data.get("type"),
             file_path=artifact_data["file_path"],
             version=artifact_data.get("version", 1),
@@ -139,19 +161,23 @@ class SQLArtifactRepository(ArtifactRepository):
         self.db.refresh(artifact)
         return model_to_dict(artifact)
 
-    def get(self, artifact_id: str) -> Optional[Dict[str, Any]]:
-        artifact = self.db.query(Artifact).filter(Artifact.id == artifact_id).first()
+    def get(self, artifact_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        artifact = self.db.query(Artifact).filter(Artifact.id == artifact_id, Artifact.user_id == uid).first()
         return model_to_dict(artifact)
 
-    def get_by_path(self, session_id: str, file_path: str) -> Optional[Dict[str, Any]]:
+    def get_by_path(self, session_id: str, file_path: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
         artifact = self.db.query(Artifact).filter(
             Artifact.session_id == session_id,
-            Artifact.file_path == file_path
+            Artifact.file_path == file_path,
+            Artifact.user_id == uid
         ).order_by(Artifact.version.desc()).first()
         return model_to_dict(artifact)
 
-    def list_by_session(self, session_id: str) -> List[Dict[str, Any]]:
-        artifacts = self.db.query(Artifact).filter(Artifact.session_id == session_id).all()
+    def list_by_session(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        artifacts = self.db.query(Artifact).filter(Artifact.session_id == session_id, Artifact.user_id == uid).all()
         latest_map = {}
         for a in artifacts:
             path = a.file_path
@@ -160,10 +186,12 @@ class SQLArtifactRepository(ArtifactRepository):
                 latest_map[path] = a
         return [model_to_dict(latest_map[p]) for p in latest_map]
 
-    def get_versions(self, session_id: str, file_path: str) -> List[Dict[str, Any]]:
+    def get_versions(self, session_id: str, file_path: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
         artifacts = self.db.query(Artifact).filter(
             Artifact.session_id == session_id,
-            Artifact.file_path == file_path
+            Artifact.file_path == file_path,
+            Artifact.user_id == uid
         ).order_by(Artifact.version.asc()).all()
         return [model_to_dict(a) for a in artifacts]
 
@@ -193,8 +221,12 @@ class SQLDecisionRepository(DecisionRepository):
         decision = self.db.query(Decision).filter(Decision.id == decision_id).first()
         return model_to_dict(decision)
 
-    def list_by_session(self, session_id: str) -> List[Dict[str, Any]]:
-        decisions = self.db.query(Decision).filter(Decision.session_id == session_id).all()
+    def list_by_session(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        decisions = self.db.query(Decision).join(DB_Session).filter(
+            Decision.session_id == session_id,
+            DB_Session.user_id == uid
+        ).all()
         return [model_to_dict(d) for d in decisions]
 
 
@@ -215,8 +247,12 @@ class SQLAuditRepository(AuditRepository):
         self.db.refresh(audit)
         return model_to_dict(audit)
 
-    def list_by_session(self, session_id: str) -> List[Dict[str, Any]]:
-        audits = self.db.query(ExecutionLog).filter(ExecutionLog.session_id == session_id).all()
+    def list_by_session(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        audits = self.db.query(ExecutionLog).join(DB_Session).filter(
+            ExecutionLog.session_id == session_id,
+            DB_Session.user_id == uid
+        ).all()
         return [model_to_dict(a) for a in audits]
 
 
@@ -238,8 +274,12 @@ class SQLEvaluationRepository(EvaluationRepository):
         self.db.refresh(eval_obj)
         return model_to_dict(eval_obj)
 
-    def get_by_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        evaluation = self.db.query(Evaluation).filter(Evaluation.session_id == session_id).first()
+    def get_by_session(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        evaluation = self.db.query(Evaluation).join(DB_Session).filter(
+            Evaluation.session_id == session_id,
+            DB_Session.user_id == uid
+        ).first()
         return model_to_dict(evaluation)
 
 
@@ -304,8 +344,12 @@ class SQLPredictionRepository:
         self.db.refresh(prediction)
         return model_to_dict(prediction)
 
-    def list_by_session(self, session_id: str) -> List[Dict[str, Any]]:
-        predictions = self.db.query(Prediction).filter(Prediction.session_id == session_id).all()
+    def list_by_session(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        predictions = self.db.query(Prediction).join(DB_Session).filter(
+            Prediction.session_id == session_id,
+            DB_Session.user_id == uid
+        ).all()
         return [model_to_dict(p) for p in predictions]
 
 
@@ -326,8 +370,12 @@ class SQLOptimizationRepository:
         self.db.refresh(optimization)
         return model_to_dict(optimization)
 
-    def list_by_session(self, session_id: str) -> List[Dict[str, Any]]:
-        optimizations = self.db.query(Optimization).filter(Optimization.session_id == session_id).all()
+    def list_by_session(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        optimizations = self.db.query(Optimization).join(DB_Session).filter(
+            Optimization.session_id == session_id,
+            DB_Session.user_id == uid
+        ).all()
         return [model_to_dict(o) for o in optimizations]
 
 
@@ -347,6 +395,10 @@ class SQLLearningRepository:
         self.db.refresh(report)
         return model_to_dict(report)
 
-    def list_by_session(self, session_id: str) -> List[Dict[str, Any]]:
-        reports = self.db.query(LearningReport).filter(LearningReport.session_id == session_id).all()
+    def list_by_session(self, session_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        uid = resolve_user_id(user_id)
+        reports = self.db.query(LearningReport).join(DB_Session).filter(
+            LearningReport.session_id == session_id,
+            DB_Session.user_id == uid
+        ).all()
         return [model_to_dict(r) for r in reports]

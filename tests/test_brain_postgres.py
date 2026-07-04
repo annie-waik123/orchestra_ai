@@ -33,10 +33,22 @@ def setup_db():
     new_engine.dispose()
     os.makedirs(TEST_STORAGE_DIR, exist_ok=True)
     Base.metadata.drop_all(bind=new_engine)
-    
-    # Bind engine and recreate tables
     Base.metadata.create_all(bind=new_engine)
+    
+    # Seed test user
+    from brain.models.postgres_models import User
+    db = sessionmaker(bind=new_engine)()
+    test_user = User(id="test-user-uuid", email="test@example.com", password_hash="dummy")
+    db.add(test_user)
+    db.commit()
+    db.close()
+
+    # Set ContextVar
+    from brain.database import current_user_id
+    token = current_user_id.set("test-user-uuid")
+    
     yield
+    current_user_id.reset(token)
     new_engine.dispose()
 
 def test_project_crud():

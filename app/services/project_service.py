@@ -32,25 +32,25 @@ class ProjectService:
             "learning_node"
         ]
 
-    def create_project(self, name: str, description: Optional[str] = None) -> Dict[str, Any]:
+    def create_project(self, name: str, description: Optional[str] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Creates a new project record in the Project Brain database."""
-        return self.brain_service.create_project(name, description)
+        return self.brain_service.create_project(name, description, user_id)
 
-    def list_projects(self) -> List[Dict[str, Any]]:
+    def list_projects(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Lists all registered projects."""
-        return self.brain_service.list_projects()
+        return self.brain_service.list_projects(user_id)
 
-    def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
+    def get_project(self, project_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Retrieves project details by ID."""
-        return self.brain_service.get_project(project_id)
+        return self.brain_service.get_project(project_id, user_id)
 
-    def list_sessions(self, project_id: str) -> List[Dict[str, Any]]:
+    def list_sessions(self, project_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Lists all sessions associated with the project."""
-        return self.brain_service.list_sessions(project_id)
+        return self.brain_service.list_sessions(project_id, user_id)
 
-    def run_pipeline(self, project_id: str, product_idea: str) -> Dict[str, Any]:
+    def run_pipeline(self, project_id: str, product_idea: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Triggers Conductor pipeline execution asynchronously."""
-        project = self.brain_service.get_project(project_id)
+        project = self.brain_service.get_project(project_id, user_id)
         if not project:
             raise ValueError(f"Project with ID '{project_id}' does not exist.")
 
@@ -80,7 +80,7 @@ class ProjectService:
         }
 
         # Create session in DB first so status checks can find it instantly
-        session = self.brain_service.create_session(project_id=project_id, dag=pipeline)
+        session = self.brain_service.create_session(project_id=project_id, dag=pipeline, user_id=user_id)
         session_id = session["id"]
 
         def background_job():
@@ -109,12 +109,13 @@ class ProjectService:
             finally:
                 remove_project_file_handler(fh)
 
-        # Submit task to runner
+        # Submit task to runner, including user_id context
         job_id = self.task_runner.submit_task(
             task_id=session_id,
             func=background_job,
             project_id=project_id,
-            product_idea=product_idea
+            product_idea=product_idea,
+            user_id=user_id
         )
 
         return {
@@ -124,9 +125,9 @@ class ProjectService:
             "status": "queued"
         }
 
-    def get_pipeline_status(self, project_id: str) -> Dict[str, Any]:
+    def get_pipeline_status(self, project_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Retrieves pipeline stages, statuses, and progress percentage for the latest run."""
-        sessions = self.list_sessions(project_id)
+        sessions = self.list_sessions(project_id, user_id)
         if not sessions:
             return {
                 "project_id": project_id,
@@ -190,27 +191,27 @@ class ProjectService:
             "node_states": node_states
         }
 
-    def get_project_artifacts(self, project_id: str) -> List[Dict[str, Any]]:
+    def get_project_artifacts(self, project_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieves all generated artifacts from the latest project session."""
-        sessions = self.list_sessions(project_id)
+        sessions = self.list_sessions(project_id, user_id)
         if not sessions:
             return []
             
         sessions.sort(key=lambda s: s.get("created_at", ""), reverse=True)
         latest_session_id = sessions[0]["id"]
         
-        return self.brain_service.list_session_artifacts(latest_session_id)
+        return self.brain_service.list_session_artifacts(latest_session_id, user_id)
 
-    def get_project_logs(self, project_id: str) -> Dict[str, Any]:
+    def get_project_logs(self, project_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Retrieves structured Project Brain audit trails and execution log trace dumps."""
-        sessions = self.list_sessions(project_id)
+        sessions = self.list_sessions(project_id, user_id)
         session_id = None
         audit_logs = []
         
         if sessions:
             sessions.sort(key=lambda s: s.get("created_at", ""), reverse=True)
             session_id = sessions[0]["id"]
-            audit_logs = self.brain_service.list_audit_trail(session_id)
+            audit_logs = self.brain_service.list_audit_trail(session_id, user_id)
 
         # Read execution run.log if it exists
         log_file = os.path.join(settings.LOGS_DIR, project_id, "run.log")

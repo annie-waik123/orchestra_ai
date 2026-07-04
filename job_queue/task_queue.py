@@ -15,7 +15,7 @@ class TaskQueue:
         self.queue_name = queue_name
         self.redis_client = RedisClient()
 
-    def enqueue_job(self, job_id: str, project_id: str, session_id: str, product_idea: str) -> bool:
+    def enqueue_job(self, job_id: str, project_id: str, session_id: str, product_idea: str, user_id: Optional[str] = None) -> bool:
         """
         Pushes a serialized job dictionary onto the task queue.
         Ensures idempotency by checking if the job ID already has a status recorded.
@@ -34,6 +34,7 @@ class TaskQueue:
             "job_id": job_id,
             "project_id": project_id,
             "session_id": session_id,
+            "user_id": user_id,
             "status": "queued",
             "retry_count": 0,
             "created_at": now_str,
@@ -47,10 +48,11 @@ class TaskQueue:
             "job_id": job_id,
             "project_id": project_id,
             "session_id": session_id,
-            "product_idea": product_idea
+            "product_idea": product_idea,
+            "user_id": user_id
         }
         client.rpush(self.queue_name, json.dumps(payload))
-        logger.info(f"Enqueued job {job_id} in queue '{self.queue_name}'")
+        logger.info(f"Enqueued job {job_id} for user {user_id} in queue '{self.queue_name}'")
         return True
 
     def dequeue_job(self, timeout: int = 0) -> Optional[Dict[str, Any]]:

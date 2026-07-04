@@ -40,3 +40,6 @@ def get_db():
         yield db
     finally:
         db.close()
+
+from contextvars import ContextVar
+current_user_id: ContextVar[str] = ContextVar("current_user_id", default="")
