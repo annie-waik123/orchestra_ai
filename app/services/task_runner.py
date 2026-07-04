@@ -97,6 +97,7 @@ class RedisTaskRunner(TaskRunner):
         
         job_id = kwargs.get("job_id") or f"job-{uuid.uuid4().hex[:8]}"
         
+        trace_id = kwargs.get("trace_id")
         from job_queue.task_queue import TaskQueue
         task_queue = TaskQueue()
         task_queue.enqueue_job(
@@ -104,7 +105,8 @@ class RedisTaskRunner(TaskRunner):
             project_id=project_id,
             session_id=session_id,
             product_idea=product_idea,
-            user_id=user_id
+            user_id=user_id,
+            trace_id=trace_id
         )
         return job_id
 

@@ -48,7 +48,7 @@ class ProjectService:
         """Lists all sessions associated with the project."""
         return self.brain_service.list_sessions(project_id, user_id)
 
-    def run_pipeline(self, project_id: str, product_idea: str, user_id: Optional[str] = None, db: Optional[Any] = None) -> Dict[str, Any]:
+    def run_pipeline(self, project_id: str, product_idea: str, user_id: Optional[str] = None, db: Optional[Any] = None, trace_id: Optional[str] = None) -> Dict[str, Any]:
         """Triggers Conductor pipeline execution asynchronously."""
         project = self.brain_service.get_project(project_id, user_id)
         if not project:
@@ -137,7 +137,8 @@ class ProjectService:
             project_id=project_id,
             product_idea=product_idea,
             user_id=user_id,
-            job_id=job_id
+            job_id=job_id,
+            trace_id=trace_id
         )
 
         return {

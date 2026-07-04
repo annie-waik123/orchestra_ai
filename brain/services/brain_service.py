@@ -181,6 +181,63 @@ class BrainService:
                 if not session:
                     return None
 
+                # Observability: Capture active_node transitions (agent execution lifecycle)
+                if "active_node" in updates:
+                    from observability.event_logger import EventLogger
+                    from observability.span_manager import SpanManager
+                    from job_queue.redis_client import RedisClient
+
+                    evt_logger = EventLogger(db)
+                    span_mgr = SpanManager(db)
+                    r_client = RedisClient().client
+
+                    old_node = session.get("active_node")
+                    new_node = updates["active_node"]
+
+                    # Close previous agent span
+                    if old_node and old_node != "init_node":
+                        span_key = f"active_span:{session_id}"
+                        try:
+                            old_span_id = r_client.get(span_key)
+                            if old_span_id:
+                                span_mgr.finish_span(old_span_id, status="success")
+                                r_client.delete(span_key)
+                        except Exception:
+                            pass
+                        evt_logger.log("AGENT_COMPLETED", {"agent_node": old_node, "status": "success"})
+
+                    # Start new agent span
+                    if new_node and new_node != "init_node":
+                        new_span_id = span_mgr.start_span(f"execute_{new_node}", {"agent_node": new_node})
+                        try:
+                            r_client.set(f"active_span:{session_id}", new_span_id)
+                        except Exception:
+                            pass
+                        evt_logger.log("AGENT_STARTED", {"agent_node": new_node})
+
+                # Close active span on session completion or failure
+                if "status" in updates and updates["status"] in ["COMPLETED", "FAILED"]:
+                    from observability.event_logger import EventLogger
+                    from observability.span_manager import SpanManager
+                    from job_queue.redis_client import RedisClient
+
+                    evt_logger = EventLogger(db)
+                    span_mgr = SpanManager(db)
+                    r_client = RedisClient().client
+
+                    curr_node = session.get("active_node")
+                    if curr_node and curr_node != "init_node":
+                        span_key = f"active_span:{session_id}"
+                        try:
+                            old_span_id = r_client.get(span_key)
+                            if old_span_id:
+                                status_str = "success" if updates["status"] == "COMPLETED" else "failed"
+                                span_mgr.finish_span(old_span_id, status=status_str)
+                                r_client.delete(span_key)
+                        except Exception:
+                            pass
+                        evt_logger.log("AGENT_COMPLETED", {"agent_node": curr_node, "status": status_str})
+
                 updated_session = repo.update(session_id, updates, user_id)
                 
                 # Log state transitions

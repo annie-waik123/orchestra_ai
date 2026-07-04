@@ -23,6 +23,8 @@ from agents.factory import AgentFactory
 
 @pytest.fixture(autouse=True)
 def setup_db_and_redis():
+    from sqlalchemy.orm import close_all_sessions
+    close_all_sessions()
     import brain.database
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
@@ -62,6 +64,7 @@ def setup_db_and_redis():
     current_user_id.reset(token)
     
     # Teardown test DB and Redis
+    close_all_sessions()
     new_engine.dispose()
     MockRedis._lists.clear()
     MockRedis._hashes.clear()
@@ -175,6 +178,8 @@ def test_worker_processing_flow():
     job_id = "test-worker-job"
 
     # Spin up background worker daemon thread
+    import workers.conductor_worker
+    workers.conductor_worker._should_stop = False
     worker_thread = threading.Thread(target=run_worker, daemon=True)
     worker_thread.start()
 
@@ -199,16 +204,26 @@ def test_worker_processing_flow():
     job = job_manager.get_job(job_id)
     assert job["status"] == "success"
 
+    import workers.conductor_worker
+    workers.conductor_worker._should_stop = True
+    try:
+        worker_thread.join(timeout=3.0)
+    except Exception:
+        pass
+
 def test_concurrency_and_multiple_workers():
     task_queue = TaskQueue()
     job_manager = JobManager()
     
+    import workers.conductor_worker
+    workers.conductor_worker._should_stop = False
+    
     # Spin up multiple worker threads
-    workers = []
+    workers_list = []
     for i in range(2):
         t = threading.Thread(target=run_worker, daemon=True)
         t.start()
-        workers.append(t)
+        workers_list.append(t)
 
     # Enqueue multiple jobs
     job_ids = [f"concurrent-job-{i}" for i in range(3)]
@@ -225,3 +240,11 @@ def test_concurrency_and_multiple_workers():
         assert job is not None
         # Since project/session registries are missing for sess-c, jobs should have ran and updated to either running/retrying/failed state
         assert job["status"] in ["queued", "running", "failed"]
+
+    import workers.conductor_worker
+    workers.conductor_worker._should_stop = True
+    for t in workers_list:
+        try:
+            t.join(timeout=3.0)
+        except Exception:
+            pass

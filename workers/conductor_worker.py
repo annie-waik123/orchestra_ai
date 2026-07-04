@@ -9,6 +9,8 @@ from brain.services.brain_service import BrainService
 
 logger = logging.getLogger("orchestra_conductor_worker")
 
+_should_stop = False
+
 def run_worker():
     """
     Stateless worker that blocks on dequeuing jobs, executes the Conductor,
@@ -20,7 +22,7 @@ def run_worker():
 
     logger.info("Conductor worker started. Block-polling task queue 'orchestra_jobs'...")
 
-    while True:
+    while not _should_stop:
         try:
             job = task_queue.dequeue_job(timeout=2)
             if not job:
@@ -32,12 +34,29 @@ def run_worker():
             product_idea = job["product_idea"]
             user_id = job.get("user_id")
 
-            logger.info(f"Acquired job {job_id} for session {session_id} and user {user_id}. Starting execution...")
+            trace_id = job.get("trace_id")
+
+            logger.info(f"Acquired job {job_id} for session {session_id}, user {user_id}, trace {trace_id}. Starting execution...")
             job_manager.update_job_status(job_id, "running")
 
-            from brain.database import current_user_id, current_session_id
+            from brain.database import current_user_id, current_session_id, current_trace_id, current_span_id
             token = current_user_id.set(user_id or "")
             sess_token = current_session_id.set(session_id or "")
+            token_trace = current_trace_id.set(trace_id or "")
+
+            # Initialize worker tracing
+            db_init = brain_service._get_db_session()
+            from observability.event_logger import EventLogger
+            from observability.span_manager import SpanManager
+            from observability.tracer import Tracer
+
+            event_logger = EventLogger(db_init)
+            span_mgr = SpanManager(db_init)
+            
+            event_logger.log("JOB_STARTED", {"job_id": job_id, "session_id": session_id})
+            worker_span_id = span_mgr.start_span("worker_execution", {"job_id": job_id, "session_id": session_id})
+            token_span = current_span_id.set(worker_span_id)
+            db_init.close()
 
             start_time = time.time()
             try:
@@ -111,7 +130,7 @@ def run_worker():
                         db = brain_service._get_db_session()
                         from billing.billing_service import BillingService
                         billing = BillingService(db)
-                        billing.finalize_job_cost(
+                        actual_cost = billing.finalize_job_cost(
                             job_id=job_id,
                             user_id=user_id or "",
                             compute_ms=compute_ms,
@@ -121,9 +140,44 @@ def run_worker():
                         db.close()
                     except Exception as e:
                         logger.error(f"Failed to finalize cost for job {job_id}: {e}")
+
+                    # Finalize Tracing & log complete/failed events
+                    try:
+                        db_finalize = brain_service._get_db_session()
+                        tracer = Tracer(db_finalize)
+                        span_mgr_end = SpanManager(db_finalize)
+                        event_logger_end = EventLogger(db_finalize)
+
+                        # Determine success state
+                        final_sess = brain_service.get_session(session_id, user_id=user_id)
+                        final_status = final_sess.get("status") if final_sess else "FAILED"
+                        status_str = "success" if final_status == "COMPLETED" else "failed"
+
+                        event_logger_end.log("JOB_COMPLETED" if status_str == "success" else "JOB_FAILED", {"final_status": final_status})
+                        span_mgr_end.finish_span(worker_span_id, status=status_str)
+                        
+                        if trace_id:
+                            tracer.end_trace(trace_id, status=status_str, duration_ms=compute_ms)
+
+                        # Track performance metrics snapshots
+                        from observability.metrics_collector import MetricsCollector
+                        metrics = MetricsCollector(db_finalize)
+                        metrics.record("worker_duration_ms", float(compute_ms), "ms")
+                        metrics.record("sandbox_duration_ms", float(sandbox_ms), "ms")
+                        metrics.record("api_calls_count", float(api_calls), "count")
+                        cost_val = 0.0
+                        if 'actual_cost' in locals() and hasattr(actual_cost, 'actual_cost_usd'):
+                            cost_val = float(actual_cost.actual_cost_usd)
+                        metrics.record("job_actual_cost", cost_val, "usd")
+                        
+                        db_finalize.close()
+                    except Exception as trace_err:
+                        logger.error(f"Failed to finalize tracing for {job_id}: {trace_err}")
             finally:
                 current_user_id.reset(token)
                 current_session_id.reset(sess_token)
+                current_trace_id.reset(token_trace)
+                current_span_id.reset(token_span)
 
         except Exception as loop_error:
             logger.error(f"Fatal worker exception in polling loop: {loop_error}")

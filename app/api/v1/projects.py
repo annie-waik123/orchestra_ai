@@ -86,17 +86,33 @@ def run_project_pipeline(
     if not is_queue_ok:
         raise HTTPException(status_code=429, detail=queue_reason)
 
-    try:
-        return service.run_pipeline(
-            project_id=project_id,
-            product_idea=run_in.product_idea,
-            user_id=user_id,
-            db=db
-        )
-    except ValueError as val_err:
-        raise HTTPException(status_code=400, detail=str(val_err))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to trigger execution pipeline: {e}")
+    # Observability: Generate Trace ID and start tracing
+    import uuid
+    from observability.tracer import Tracer, SpanContext
+    from observability.event_logger import EventLogger
+    
+    trace_id = f"tr-{uuid.uuid4().hex[:8]}"
+    tracer = Tracer(db)
+    tracer.start_trace(user_id=user_id, session_id="pending-session-init", trace_id=trace_id)
+
+    with SpanContext(db, "api_run_pipeline", {"project_id": project_id, "product_idea": run_in.product_idea}) as root_span:
+        event_logger = EventLogger(db)
+        event_logger.log("JOB_ENQUEUED", {"project_id": project_id, "product_idea": run_in.product_idea})
+        
+        try:
+            return service.run_pipeline(
+                project_id=project_id,
+                product_idea=run_in.product_idea,
+                user_id=user_id,
+                db=db,
+                trace_id=trace_id
+            )
+        except ValueError as val_err:
+            root_span.metadata["error"] = str(val_err)
+            raise HTTPException(status_code=400, detail=str(val_err))
+        except Exception as e:
+            root_span.metadata["error"] = str(e)
+            raise HTTPException(status_code=400, detail=f"Failed to trigger execution pipeline: {e}")
 
 @router.get("/{project_id}/sessions", response_model=List[SessionResponse], responses={404: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
 def list_project_sessions(
@@ -183,3 +199,17 @@ def generate_project_api_key(
     project.api_key_hash = hash_api_key(raw_key)
     db.commit()
     return {"api_key": raw_key}
+
+@router.get("/traces/{trace_id}", responses={404: {"model": ErrorResponse}})
+def get_trace_replay(
+    trace_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieves trace, spans, structured event logs, and metric snapshots for debugging."""
+    from observability.trace_store import TraceStore
+    store = TraceStore(db)
+    replay = store.get_trace_replay(trace_id)
+    if not replay:
+        raise HTTPException(status_code=404, detail=f"Trace with ID '{trace_id}' not found.")
+    return replay

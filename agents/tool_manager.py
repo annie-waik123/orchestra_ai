@@ -118,16 +118,60 @@ class ToolManager:
         success = False
         duration_ms = 0
 
-        if self.sandbox_manager.is_enabled():
-            try:
-                result = self.sandbox_manager.execute(command, files)
-                success = result.get("status") == "success"
-                duration_ms = result.get("duration_ms", 0)
+        from brain.database import SessionLocal
+        db = SessionLocal()
+        from observability.tracer import SpanContext
+        from observability.event_logger import EventLogger
+
+        try:
+            with SpanContext(db, "sandbox_execution", {"command": command}) as span:
+                event_logger = EventLogger(db)
                 
-                # Accumulate sandbox time in Redis
+                if self.sandbox_manager.is_enabled():
+                    try:
+                        result = self.sandbox_manager.execute(command, files)
+                        success = result.get("status") == "success"
+                        duration_ms = result.get("duration_ms", 0)
+                        
+                        # Accumulate sandbox time in Redis
+                        from brain.database import current_session_id
+                        session_id = current_session_id.get()
+                        if session_id and duration_ms > 0:
+                            try:
+                                from job_queue.redis_client import RedisClient
+                                r_client = RedisClient().client
+                                key = f"sandbox_time:{session_id}"
+                                curr = r_client.get(key)
+                                r_client.set(key, str((int(curr) if curr else 0) + duration_ms))
+                            except Exception:
+                                pass
+                        
+                        event_logger.log("SANDBOX_EXECUTED", {"command": command, "success": success, "duration_ms": duration_ms})
+                        span.metadata["duration_ms"] = duration_ms
+                        span.metadata["status"] = result.get("status")
+                        return result
+                    except Exception as e:
+                        event_logger.log("SANDBOX_EXECUTED", {"command": command, "success": False, "error": str(e)})
+                        # Lazy import ToolError to avoid circular import issues
+                        from agents.models import ToolError
+                        raise ToolError(
+                            capability="execute_in_sandbox",
+                            server="sandbox",
+                            cause=f"Docker sandbox execution failed: {e}",
+                            recoverable_hint=False
+                        ) from e
+                    finally:
+                        latency = (time.time() - start_time) * 1000.0
+                        self.metrics.record_tool_call("execute_in_sandbox", latency, success)
+
+                res = self._execute_tool_call("execute_in_sandbox", "sandbox", "execute_command", {"command": command, "files": files})
+                duration_ms = int((time.time() - start_time) * 1000.0)
+                success = True # Assume success for fallback command execution
+                
+                # Accumulate sandbox fallback time in Redis
                 from brain.database import current_session_id
                 session_id = current_session_id.get()
-                if session_id and duration_ms > 0:
+                if session_id:
                     try:
                         from job_queue.redis_client import RedisClient
                         r_client = RedisClient().client
@@ -136,40 +180,16 @@ class ToolManager:
                         r_client.set(key, str((int(curr) if curr else 0) + duration_ms))
                     except Exception:
                         pass
-                
-                return result
-            except Exception as e:
-                # Lazy import ToolError to avoid circular import issues
-                from agents.models import ToolError
-                raise ToolError(
-                    capability="execute_in_sandbox",
-                    server="sandbox",
-                    cause=f"Docker sandbox execution failed: {e}",
-                    recoverable_hint=False
-                ) from e
-            finally:
-                latency = (time.time() - start_time) * 1000.0
-                self.metrics.record_tool_call("execute_in_sandbox", latency, success)
 
-        res = self._execute_tool_call("execute_in_sandbox", "sandbox", "execute_command", {"command": command, "files": files})
-        duration_ms = int((time.time() - start_time) * 1000.0)
-        
-        # Accumulate sandbox fallback time in Redis
-        from brain.database import current_session_id
-        session_id = current_session_id.get()
-        if session_id:
-            try:
-                from job_queue.redis_client import RedisClient
-                r_client = RedisClient().client
-                key = f"sandbox_time:{session_id}"
-                curr = r_client.get(key)
-                r_client.set(key, str((int(curr) if curr else 0) + duration_ms))
-            except Exception:
-                pass
+                event_logger.log("SANDBOX_EXECUTED", {"command": command, "success": success, "duration_ms": duration_ms, "fallback": True})
+                span.metadata["duration_ms"] = duration_ms
+                span.metadata["fallback"] = True
 
-        if isinstance(res, dict):
-            return res
-        return {"stdout": str(res), "stderr": "", "exit_code": 0}
+                if isinstance(res, dict):
+                    return res
+                return {"stdout": str(res), "stderr": "", "exit_code": 0}
+        finally:
+            db.close()
 
     def validate_sql(self, schema: str) -> Dict[str, Any]:
         """Validates relational DDL syntax using Sandbox SQL parser/linter."""

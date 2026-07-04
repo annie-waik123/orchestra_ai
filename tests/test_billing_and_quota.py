@@ -103,16 +103,13 @@ def test_queue_flooding_abuse_prevention():
     proj = client.post("/api/v1/projects", headers=headers, json={"name": "Flood Proj"}).json()
     proj_id = proj["id"]
 
-    # 2. Pre-populate 3 queued/running jobs for this user in Redis
-    task_queue = TaskQueue()
+    mock_redis = RedisClient().client
     for i in range(3):
-        task_queue.enqueue_job(
-            job_id=f"job-flood-{i}",
-            project_id=proj_id,
-            session_id=f"sess-flood-{i}",
-            product_idea="flooding test",
-            user_id=user.id
-        )
+        job_state = {
+            "user_id": user.id,
+            "status": "queued"
+        }
+        mock_redis.hset("orchestra_job_states", f"job-flood-{i}", json.dumps(job_state))
 
     # 3. Triggering a 4th run must be blocked by queue flooding check
     res = client.post(f"/api/v1/projects/{proj_id}/run", headers=headers, json={"product_idea": "flood run"})

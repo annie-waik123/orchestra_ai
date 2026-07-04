@@ -18,6 +18,8 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
     # Ensure a clean slate for storage
+    from sqlalchemy.orm import close_all_sessions
+    close_all_sessions()
     from brain.database import engine
     engine.dispose()
     if os.path.exists(TEST_STORAGE_DIR):
@@ -30,6 +32,7 @@ def setup_and_teardown():
     os.makedirs(TEST_STORAGE_DIR, exist_ok=True)
     yield
     # Cleanup after tests
+    close_all_sessions()
     engine.dispose()
     if os.path.exists(TEST_STORAGE_DIR):
         try:

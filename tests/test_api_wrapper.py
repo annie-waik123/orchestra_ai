@@ -25,6 +25,8 @@ def setup_and_teardown():
     db_url = f"sqlite:///{db_path}"
     os.environ["ORCHESTRA_DATABASE_URL"] = db_url
 
+    from sqlalchemy.orm import close_all_sessions
+    close_all_sessions()
     new_engine = create_engine(
         db_url,
         connect_args={"check_same_thread": False},
@@ -56,6 +58,8 @@ def setup_and_teardown():
     app.dependency_overrides[get_current_user] = lambda: {"id": "test-user-uuid", "email": "test@example.com"}
 
     # Start conductor background worker thread
+    import workers.conductor_worker
+    workers.conductor_worker._should_stop = False
     from workers.conductor_worker import run_worker
     import threading
     worker_thread = threading.Thread(target=run_worker, daemon=True)
@@ -120,6 +124,13 @@ def setup_and_teardown():
     yield
     
     # Cleanup after test
+    import workers.conductor_worker
+    workers.conductor_worker._should_stop = True
+    try:
+        worker_thread.join(timeout=3.0)
+    except Exception:
+        pass
+    close_all_sessions()
     if os.path.exists(TEST_STORAGE_DIR):
         try:
             shutil.rmtree(TEST_STORAGE_DIR)

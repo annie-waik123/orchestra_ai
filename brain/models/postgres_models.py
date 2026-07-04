@@ -219,3 +219,53 @@ class JobCost(Base):
     actual_cost_usd = Column(Float, default=0.0, nullable=False)
     created_at = Column(DateTime, default=get_utc_now)
     updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
+class Trace(Base):
+    __tablename__ = "traces"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String, default="running", nullable=False)
+    duration_ms = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=get_utc_now)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
+class Span(Base):
+    __tablename__ = "spans"
+
+    id = Column(String, primary_key=True)
+    trace_id = Column(String, ForeignKey("traces.id", ondelete="CASCADE"), nullable=False)
+    parent_span_id = Column(String, nullable=True)
+    name = Column(String, nullable=False)
+    status = Column(String, default="success", nullable=False)
+    start_time = Column(DateTime, default=get_utc_now, nullable=False)
+    end_time = Column(DateTime, nullable=True)
+    metadata_json = Column(JSON, default=dict)
+    
+    created_at = Column(DateTime, default=get_utc_now)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
+class EventLog(Base):
+    __tablename__ = "event_logs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    trace_id = Column(String, ForeignKey("traces.id", ondelete="CASCADE"), nullable=False)
+    span_id = Column(String, ForeignKey("spans.id", ondelete="CASCADE"), nullable=True)
+    event_type = Column(String, nullable=False) # AGENT_STARTED, AGENT_COMPLETED, TOOL_CALLED, etc.
+    payload_json = Column(JSON, default=dict)
+    timestamp = Column(DateTime, default=get_utc_now, nullable=False)
+
+
+class MetricSnapshot(Base):
+    __tablename__ = "metric_snapshots"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    trace_id = Column(String, ForeignKey("traces.id", ondelete="CASCADE"), nullable=False)
+    metric_name = Column(String, nullable=False)
+    value = Column(Float, nullable=False)
+    unit = Column(String, nullable=False)
+    timestamp = Column(DateTime, default=get_utc_now, nullable=False)
